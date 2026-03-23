@@ -137,11 +137,9 @@ webapp/
 │   ├── 0003_courses.sql
 │   ├── 0004_smartwatch_course_seed.sql
 │   ├── 0005_full_smartwatch_course_content.sql
-│   ├── 0006_complete_coursera_level_content.sql
+│   ├── 0006_complete_coursera_level_content.sql  # Main course content
 │   ├── 0007_comments_and_reviews.sql
-│   ├── 0008_ballbeam_course.sql
-│   ├── 0009_verbatim_smartwatch_content.sql  # Exact PDF text
-│   └── 0010_verbatim_ballbeam_content.sql    # Exact PDF text
+│   └── 0008_ballbeam_course.sql
 │
 ├── wrangler.jsonc             # Cloudflare configuration
 ├── vite.config.ts             # Vite build config
@@ -637,12 +635,6 @@ npx wrangler d1 execute shortcircuits-db --local --file=./migrations/0007_commen
 
 # 9. Ball and Beam course
 npx wrangler d1 execute shortcircuits-db --local --file=./migrations/0008_ballbeam_course.sql
-
-# 10. VERBATIM SMARTWATCH CONTENT (exact text from PDF documentation)
-npx wrangler d1 execute shortcircuits-db --local --file=./migrations/0009_verbatim_smartwatch_content.sql
-
-# 11. VERBATIM BALL AND BEAM CONTENT (exact text from PDF documentation)
-npx wrangler d1 execute shortcircuits-db --local --file=./migrations/0010_verbatim_ballbeam_content.sql
 ```
 
 For **production**, replace `--local` with `--remote`:
@@ -652,17 +644,16 @@ npx wrangler d1 execute shortcircuits-db --remote --file=./migrations/0001_initi
 # ... etc for all migrations
 ```
 
-### About Verbatim Content Migrations
+### About Course Content
 
-Migrations 0009 and 0010 are critical - they replace all course content with the **exact verbatim text** from the official PDF documentation:
+The course content in `0006_complete_coursera_level_content.sql` is structured for the LMS frontend:
+- Each lesson has a `content_json` field with `sections` array
+- Content uses markdown formatting (headers, code blocks, lists, callouts)
+- Videos have `video_url` fields for YouTube embeds
+- Quizzes have associated `quiz_questions` in a separate table
+- Submissions have rubrics and file requirements
 
-- **0009_verbatim_smartwatch_content.sql**: Updates all Smartwatch course lessons with word-for-word content from "Smartwatch Project Full Documentation.pdf"
-- **0010_verbatim_ballbeam_content.sql**: Updates all Ball and Beam course lessons with word-for-word content from "Ball and Beam Documentation for Kayla.pdf"
-
-These migrations ensure that:
-1. All course text matches the official documentation exactly
-2. No content is summarized or rewritten
-3. Students see the same text as in the PDF materials
+The content is based on the official Short Circuit PDF documentation but formatted for web display with proper markdown, code highlighting, and interactive elements.
 
 ### Testing the Deployment
 
