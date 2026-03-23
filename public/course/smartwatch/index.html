@@ -6955,14 +6955,16 @@
             const iconClass = getLessonIconClass(lesson.content_type, isCompleted);
             const typeLabel = getTypeLabel(lesson.content_type);
             
-            // Parse lesson content
+            // Parse lesson content - check both content and content_json
             let content = '';
             let videoId = null;
             
             try {
-                const lessonContent = typeof lesson.content === 'string' 
-                    ? JSON.parse(lesson.content) 
-                    : lesson.content;
+                // Try content_json first (from API), then content
+                let lessonContent = lesson.content_json || lesson.content;
+                if (typeof lessonContent === 'string') {
+                    lessonContent = JSON.parse(lessonContent);
+                }
                 
                 if (lessonContent) {
                     // Extract video ID if present
@@ -6970,8 +6972,38 @@
                         videoId = extractYouTubeId(lessonContent.video_url);
                     }
                     
-                    // Build text content
-                    if (lessonContent.description) {
+                    // Render sections array (primary format from PDF content)
+                    if (lessonContent.sections && lessonContent.sections.length) {
+                        content += lessonContent.sections.map(section => {
+                            // Convert markdown-style formatting to HTML
+                            let sectionContent = section.content || '';
+                            // Bold text
+                            sectionContent = sectionContent.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                            // Links
+                            sectionContent = sectionContent.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                            // Line breaks to paragraphs
+                            sectionContent = sectionContent.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+                            // Lists (simple conversion)
+                            sectionContent = sectionContent.replace(/<p>- /g, '<li>').replace(/<\/p>(\s*<li>)/g, '</li>$1');
+                            
+                            return `<h3>${section.title}</h3>${sectionContent}`;
+                        }).join('');
+                    }
+                    
+                    // Render key_points if available
+                    if (lessonContent.key_points && lessonContent.key_points.length) {
+                        content += `<h3>Key Takeaways</h3><ul>${lessonContent.key_points.map(p => `<li>${p}</li>`).join('')}</ul>`;
+                    }
+                    
+                    // Render resources if available
+                    if (lessonContent.resources && lessonContent.resources.length) {
+                        content += `<h3>Resources</h3><ul>${lessonContent.resources.map(r => 
+                            `<li><a href="${r.url}" target="_blank">${r.title}</a></li>`
+                        ).join('')}</ul>`;
+                    }
+                    
+                    // Fallback to old format fields
+                    if (!content && lessonContent.description) {
                         content += `<p>${lessonContent.description}</p>`;
                     }
                     
