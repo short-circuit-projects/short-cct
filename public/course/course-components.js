@@ -4,6 +4,90 @@
  */
 
 // ============================================
+// IMAGE URL RESOLUTION HELPER
+// ============================================
+// This resolves Genspark URLs to embedded Base64 images if available
+// The EMBEDDED_IMAGES object is loaded from embedded-images.js
+const ImageResolver = {
+    // URL mapping from Genspark to embedded image IDs
+    urlMap: {
+        // Overview
+        'https://www.genspark.ai/api/files/s/2D27gI2m': 'page2_img1',
+        // File Structure
+        'https://www.genspark.ai/api/files/s/GRlXsv6S': 'page5_img1',
+        'https://www.genspark.ai/api/files/s/OpYat2ou': 'page5_img2',
+        'https://www.genspark.ai/api/files/s/JV9pfb30': 'page6_img1',
+        // Pointers
+        'https://www.genspark.ai/api/files/s/YsKE1msu': 'page8_img1',
+        'https://www.genspark.ai/api/files/s/TYGHNi6D': 'page8_img2',
+        'https://www.genspark.ai/api/files/s/Bp3rosBj': 'page9_img1',
+        'https://www.genspark.ai/api/files/s/r35lc3EY': 'page9_img2',
+        'https://www.genspark.ai/api/files/s/DvkMDv39': 'page10_img1',
+        'https://www.genspark.ai/api/files/s/CYKOT8kp': 'page11_img1',
+        // Bit Manipulation
+        'https://www.genspark.ai/api/files/s/Z9xpiYDO': 'page13_img1',
+        'https://www.genspark.ai/api/files/s/wHbEXFla': 'page14_img1',
+        'https://www.genspark.ai/api/files/s/Zo4l8Wm5': 'page14_img2',
+        'https://www.genspark.ai/api/files/s/0XJzPdu7': 'page15_img1',
+        'https://www.genspark.ai/api/files/s/dYzN0ted': 'page15_img2',
+        'https://www.genspark.ai/api/files/s/qDuaF8PU': 'page15_img3',
+        'https://www.genspark.ai/api/files/s/acKfwwo2': 'page15_img4',
+        // I2C
+        'https://www.genspark.ai/api/files/s/8tNSM42D': 'page17_img1',
+        'https://www.genspark.ai/api/files/s/MYY042R8': 'page18_img1',
+        'https://www.genspark.ai/api/files/s/lG8RU3MP': 'page19_img1',
+        // OOP
+        'https://www.genspark.ai/api/files/s/33SvqwyJ': 'page21_img1',
+        'https://www.genspark.ai/api/files/s/tzy3mRia': 'page21_img2',
+        'https://www.genspark.ai/api/files/s/ISx1Ioau': 'page22_img1',
+        'https://www.genspark.ai/api/files/s/msglza9U': 'page23_img1',
+        'https://www.genspark.ai/api/files/s/hE3LKSea': 'page24_img1',
+        'https://www.genspark.ai/api/files/s/QYO4KoAH': 'page25_img1',
+        'https://www.genspark.ai/api/files/s/yrUGzVmm': 'page25_img2',
+        'https://www.genspark.ai/api/files/s/EJF9yowV': 'page26_img1',
+        // RTOS
+        'https://www.genspark.ai/api/files/s/8bBvUCH6': 'page27_img1',
+        'https://www.genspark.ai/api/files/s/gxNq2fg8': 'page27_img2',
+        'https://www.genspark.ai/api/files/s/ytq6UNqw': 'page28_img1',
+        'https://www.genspark.ai/api/files/s/g1V2EvTm': 'page29_img2',
+        // Static/Volatile
+        'https://www.genspark.ai/api/files/s/bZSd5ecR': 'page31_img1',
+        'https://www.genspark.ai/api/files/s/LtJn6Qoc': 'page31_img2',
+        'https://www.genspark.ai/api/files/s/WPGSr9km': 'page32_img1',
+        // Timing
+        'https://www.genspark.ai/api/files/s/sSz0ELmR': 'page33_img1',
+        'https://www.genspark.ai/api/files/s/v99hf3ba': 'page33_img2',
+        'https://www.genspark.ai/api/files/s/VA2HFoaq': 'page34_img1',
+        'https://www.genspark.ai/api/files/s/JLVou8yj': 'page34_img2',
+        'https://www.genspark.ai/api/files/s/ibDfOADR': 'page35_img1',
+        // FSM
+        'https://www.genspark.ai/api/files/s/3OL8Yt1d': 'page38_img1',
+        // Networking
+        'https://www.genspark.ai/api/files/s/52YAFb3q': 'page39_img1',
+        'https://www.genspark.ai/api/files/s/S6mWhW98': 'page40_img1'
+    },
+    
+    /**
+     * Resolve image URL - returns embedded Base64 if available, otherwise original URL
+     * @param {string} url - The original image URL
+     * @returns {string} The resolved URL (Base64 data URI or original)
+     */
+    resolve(url) {
+        if (!url) return url;
+        const imageId = this.urlMap[url];
+        if (imageId && typeof EMBEDDED_IMAGES !== 'undefined' && EMBEDDED_IMAGES[imageId]) {
+            return EMBEDDED_IMAGES[imageId].dataUri;
+        }
+        return url;
+    }
+};
+
+// Global function for backward compatibility with inline HTML
+function resolveImageUrl(url) {
+    return ImageResolver.resolve(url);
+}
+
+// ============================================
 // PROGRESS RING COMPONENT
 // ============================================
 const ProgressRing = {
@@ -216,14 +300,14 @@ const LessonRenderer = {
         const sections = contentJson.sections.map(section => {
             const content = MarkdownRenderer.render(section.content || '');
             
-            // Render images if present in section
+            // Render images if present in section (using embedded Base64 images)
             let imagesHtml = '';
             if (section.images && section.images.length > 0) {
                 imagesHtml = `
                     <div class="section-images">
                         ${section.images.map(img => `
                             <figure class="lesson-image">
-                                <img src="${img.url}" alt="${img.alt || img.description || section.title}" loading="lazy" onclick="if(typeof openImageModal === 'function') openImageModal(this.src, this.alt)">
+                                <img src="${ImageResolver.resolve(img.url)}" alt="${img.alt || img.description || section.title}" loading="lazy" onclick="if(typeof openImageModal === 'function') openImageModal(this.src, this.alt)">
                                 ${img.caption ? `<figcaption>${img.caption}</figcaption>` : ''}
                             </figure>
                         `).join('')}
@@ -240,8 +324,18 @@ const LessonRenderer = {
             `;
         }).join('');
         
-        // Key Takeaways section removed per user request - content preserved in data
+        // Key points section
         let keyPoints = '';
+        if (contentJson.key_points && contentJson.key_points.length > 0) {
+            keyPoints = `
+                <div class="lesson-section key-takeaways">
+                    <h3><i class="fas fa-lightbulb"></i> Key Takeaways</h3>
+                    <ul class="key-points-list">
+                        ${contentJson.key_points.map(p => `<li>${p}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
         
         // Add resources if available
         let resources = '';
@@ -261,10 +355,29 @@ const LessonRenderer = {
             `;
         }
         
+        // Top-level images (diagrams, code screenshots, etc.) - using embedded Base64
+        let topLevelImages = '';
+        if (contentJson.images && contentJson.images.length > 0) {
+            topLevelImages = `
+                <div class="lesson-section lesson-images-section">
+                    <h3><i class="fas fa-images"></i> Diagrams and Code Examples</h3>
+                    <div class="lesson-images-grid">
+                        ${contentJson.images.map(img => `
+                            <figure class="lesson-image-card">
+                                <img src="${ImageResolver.resolve(img.url)}" alt="${img.alt || 'Lesson image'}" loading="lazy" onclick="if(typeof openImageModal === 'function') openImageModal(this.src, this.alt)">
+                                ${img.caption ? `<figcaption>${img.caption}</figcaption>` : ''}
+                            </figure>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
         return `
             <div class="lesson-card">
                 ${sections}
                 ${keyPoints}
+                ${topLevelImages}
                 ${resources}
             </div>
         `;
@@ -304,14 +417,14 @@ const LessonRenderer = {
             description = contentJson.sections.map(section => {
                 const content = MarkdownRenderer.render(section.content || '');
                 
-                // Render images if present in section
+                // Render images if present in section (using embedded Base64 images)
                 let imagesHtml = '';
                 if (section.images && section.images.length > 0) {
                     imagesHtml = `
                         <div class="section-images">
                             ${section.images.map(img => `
                                 <figure class="lesson-image">
-                                    <img src="${img.url}" alt="${img.alt || img.description || section.title}" loading="lazy" onclick="if(typeof openImageModal === 'function') openImageModal(this.src, this.alt)">
+                                    <img src="${ImageResolver.resolve(img.url)}" alt="${img.alt || img.description || section.title}" loading="lazy" onclick="if(typeof openImageModal === 'function') openImageModal(this.src, this.alt)">
                                     ${img.caption ? `<figcaption>${img.caption}</figcaption>` : ''}
                                 </figure>
                             `).join('')}
@@ -331,10 +444,62 @@ const LessonRenderer = {
             description = `<p>${lesson.description}</p>`;
         }
         
+        // Key points section for video lessons
+        let keyPoints = '';
+        if (contentJson?.key_points && contentJson.key_points.length > 0) {
+            keyPoints = `
+                <div class="lesson-section key-takeaways">
+                    <h3><i class="fas fa-lightbulb"></i> Key Takeaways</h3>
+                    <ul class="key-points-list">
+                        ${contentJson.key_points.map(p => `<li>${p}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // Top-level images (diagrams, code screenshots, etc.) - using embedded Base64
+        let topLevelImages = '';
+        if (contentJson?.images && contentJson.images.length > 0) {
+            topLevelImages = `
+                <div class="lesson-section lesson-images-section">
+                    <h3><i class="fas fa-images"></i> Diagrams and Code Examples</h3>
+                    <div class="lesson-images-grid">
+                        ${contentJson.images.map(img => `
+                            <figure class="lesson-image-card">
+                                <img src="${ImageResolver.resolve(img.url)}" alt="${img.alt || 'Lesson image'}" loading="lazy" onclick="if(typeof openImageModal === 'function') openImageModal(this.src, this.alt)">
+                                ${img.caption ? `<figcaption>${img.caption}</figcaption>` : ''}
+                            </figure>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Resources section for video lessons
+        let resources = '';
+        if (contentJson?.resources && contentJson.resources.length > 0) {
+            resources = `
+                <div class="resources-box">
+                    <h4><i class="fas fa-download"></i> Resources</h4>
+                    <div class="resources-grid">
+                        ${contentJson.resources.map(res => `
+                            <a href="${res.url}" target="_blank" class="resource-item">
+                                <i class="fas ${this.getResourceIcon(res.type)}"></i>
+                                <span>${res.title || res.name || 'Resource'}</span>
+                            </a>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
         return `
             <div class="lesson-card">
                 ${videoPlayer}
                 ${description}
+                ${keyPoints}
+                ${topLevelImages}
+                ${resources}
             </div>
         `;
     },
