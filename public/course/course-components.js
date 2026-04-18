@@ -6,82 +6,50 @@
 // ============================================
 // IMAGE URL RESOLUTION HELPER
 // ============================================
-// This resolves Genspark URLs to embedded Base64 images if available
-// The EMBEDDED_IMAGES object is loaded from embedded-images.js
+// Resolves embedded image IDs to optimized WebP file images
+// Falls back to embedded Base64 if file not available
+// Images in database use format: "embedded:image_id" (e.g., "embedded:page2_img1")
 const ImageResolver = {
-    // URL mapping from Genspark to embedded image IDs
-    urlMap: {
-        // Overview
-        'https://www.genspark.ai/api/files/s/2D27gI2m': 'page2_img1',
-        // File Structure
-        'https://www.genspark.ai/api/files/s/GRlXsv6S': 'page5_img1',
-        'https://www.genspark.ai/api/files/s/OpYat2ou': 'page5_img2',
-        'https://www.genspark.ai/api/files/s/JV9pfb30': 'page6_img1',
-        // Pointers
-        'https://www.genspark.ai/api/files/s/YsKE1msu': 'page8_img1',
-        'https://www.genspark.ai/api/files/s/TYGHNi6D': 'page8_img2',
-        'https://www.genspark.ai/api/files/s/Bp3rosBj': 'page9_img1',
-        'https://www.genspark.ai/api/files/s/r35lc3EY': 'page9_img2',
-        'https://www.genspark.ai/api/files/s/DvkMDv39': 'page10_img1',
-        'https://www.genspark.ai/api/files/s/CYKOT8kp': 'page11_img1',
-        // Bit Manipulation
-        'https://www.genspark.ai/api/files/s/Z9xpiYDO': 'page13_img1',
-        'https://www.genspark.ai/api/files/s/wHbEXFla': 'page14_img1',
-        'https://www.genspark.ai/api/files/s/Zo4l8Wm5': 'page14_img2',
-        'https://www.genspark.ai/api/files/s/0XJzPdu7': 'page15_img1',
-        'https://www.genspark.ai/api/files/s/dYzN0ted': 'page15_img2',
-        'https://www.genspark.ai/api/files/s/qDuaF8PU': 'page15_img3',
-        'https://www.genspark.ai/api/files/s/acKfwwo2': 'page15_img4',
-        // I2C
-        'https://www.genspark.ai/api/files/s/8tNSM42D': 'page17_img1',
-        'https://www.genspark.ai/api/files/s/MYY042R8': 'page18_img1',
-        'https://www.genspark.ai/api/files/s/lG8RU3MP': 'page19_img1',
-        // OOP
-        'https://www.genspark.ai/api/files/s/33SvqwyJ': 'page21_img1',
-        'https://www.genspark.ai/api/files/s/tzy3mRia': 'page21_img2',
-        'https://www.genspark.ai/api/files/s/ISx1Ioau': 'page22_img1',
-        'https://www.genspark.ai/api/files/s/msglza9U': 'page23_img1',
-        'https://www.genspark.ai/api/files/s/hE3LKSea': 'page24_img1',
-        'https://www.genspark.ai/api/files/s/QYO4KoAH': 'page25_img1',
-        'https://www.genspark.ai/api/files/s/yrUGzVmm': 'page25_img2',
-        'https://www.genspark.ai/api/files/s/EJF9yowV': 'page26_img1',
-        // RTOS
-        'https://www.genspark.ai/api/files/s/8bBvUCH6': 'page27_img1',
-        'https://www.genspark.ai/api/files/s/gxNq2fg8': 'page27_img2',
-        'https://www.genspark.ai/api/files/s/ytq6UNqw': 'page28_img1',
-        'https://www.genspark.ai/api/files/s/g1V2EvTm': 'page29_img2',
-        // Static/Volatile
-        'https://www.genspark.ai/api/files/s/bZSd5ecR': 'page31_img1',
-        'https://www.genspark.ai/api/files/s/LtJn6Qoc': 'page31_img2',
-        'https://www.genspark.ai/api/files/s/WPGSr9km': 'page32_img1',
-        // Timing
-        'https://www.genspark.ai/api/files/s/sSz0ELmR': 'page33_img1',
-        'https://www.genspark.ai/api/files/s/v99hf3ba': 'page33_img2',
-        'https://www.genspark.ai/api/files/s/VA2HFoaq': 'page34_img1',
-        'https://www.genspark.ai/api/files/s/JLVou8yj': 'page34_img2',
-        'https://www.genspark.ai/api/files/s/ibDfOADR': 'page35_img1',
-        // FSM
-        'https://www.genspark.ai/api/files/s/3OL8Yt1d': 'page38_img1',
-        // Networking
-        'https://www.genspark.ai/api/files/s/52YAFb3q': 'page39_img1',
-        'https://www.genspark.ai/api/files/s/S6mWhW98': 'page40_img1'
-    },
-    
     // Base path for optimized WebP images
     webpBasePath: '/images/course/smartwatch/',
     
     /**
      * Resolve image URL - prefers optimized WebP files, falls back to embedded Base64
-     * @param {string} url - The original image URL
+     * @param {string} url - The image URL or embedded image ID (format: "embedded:image_id")
      * @returns {string} The resolved URL (WebP file path, Base64 data URI, or original)
      */
     resolve(url) {
         if (!url) return url;
-        const imageId = this.urlMap[url];
-        if (imageId) {
-            // PRIORITY: Use optimized WebP file for better quality
-            return this.webpBasePath + imageId + '.webp';
+        
+        // Check if it's an embedded image reference
+        if (url.startsWith('embedded:')) {
+            const imageId = url.replace('embedded:', '');
+            
+            // PRIORITY 1: Use optimized WebP file if available
+            // These are high-quality upscaled images at /images/course/smartwatch/
+            const webpPath = this.webpBasePath + imageId + '.webp';
+            return webpPath;
         }
+        
+        // Return original URL for external images
+        return url;
+    },
+    
+    /**
+     * Fallback resolver - only use embedded base64 (for debugging or if files fail)
+     * @param {string} url - The image URL or embedded image ID
+     * @returns {string} The resolved Base64 data URI
+     */
+    resolveEmbedded(url) {
+        if (!url) return url;
+        
+        if (url.startsWith('embedded:')) {
+            const imageId = url.replace('embedded:', '');
+            if (typeof EMBEDDED_IMAGES !== 'undefined' && EMBEDDED_IMAGES[imageId]) {
+                return EMBEDDED_IMAGES[imageId].dataUri;
+            }
+        }
+        
         return url;
     }
 };
@@ -218,6 +186,52 @@ const MarkdownRenderer = {
         // Numbered lists (1. item)
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
         
+        // Tables (| col1 | col2 | ... |)
+        // Match markdown tables with header, separator, and data rows
+        html = html.replace(/(\|[^\n]+\|\n?)+/g, (match) => {
+            const rows = match.trim().split('\n').filter(row => row.trim() && row.includes('|'));
+            if (rows.length < 2) return match;
+            
+            let tableHtml = '<div class="table-wrapper"><table class="lesson-table">';
+            let headerDone = false;
+            let dataRowIndex = 0;
+            
+            rows.forEach((row) => {
+                // Skip separator row (|---|---| or | --- | --- |)
+                if (row.match(/^\|[\s\-:\|]+\|?$/) || row.match(/^\|(\s*[-:]+\s*\|)+\s*$/)) {
+                    return;
+                }
+                
+                // Split by | and filter out empty cells from start/end
+                const cells = row.split('|').slice(1, -1).map(cell => cell.trim());
+                if (cells.length === 0) return;
+                
+                // First non-separator row is the header
+                if (!headerDone) {
+                    tableHtml += '<thead><tr class="table-header">';
+                    cells.forEach(cell => {
+                        // Unescape any escaped pipes
+                        const cellContent = cell.replace(/\\\|/g, '|');
+                        tableHtml += `<th>${cellContent}</th>`;
+                    });
+                    tableHtml += '</tr></thead><tbody>';
+                    headerDone = true;
+                } else {
+                    tableHtml += `<tr>`;
+                    cells.forEach(cell => {
+                        // Unescape any escaped pipes
+                        const cellContent = cell.replace(/\\\|/g, '|');
+                        tableHtml += `<td>${cellContent}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                    dataRowIndex++;
+                }
+            });
+            
+            tableHtml += '</tbody></table></div>';
+            return tableHtml;
+        });
+        
         // Links [text](url)
         html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
         
@@ -308,8 +322,78 @@ const LessonRenderer = {
             `;
         }
         
+        // Helper function to render a single video
+        const renderVideo = (vid) => {
+            const vidId = this.extractVideoId(vid.url);
+            if (vid.type === 'youtube' || vidId) {
+                return `
+                    <div class="video-container">
+                        ${vid.title ? `<h4 class="video-title">${vid.title}</h4>` : ''}
+                        <iframe 
+                            src="https://www.youtube.com/embed/${vidId}?rel=0&modestbranding=1"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                        ></iframe>
+                    </div>
+                `;
+            } else {
+                // Direct video (R2 or other hosted video)
+                return `
+                    <div class="video-container video-container-direct">
+                        ${vid.title ? `<h4 class="video-title">${vid.title}</h4>` : ''}
+                        <video controls preload="metadata" playsinline>
+                            <source src="${vid.url}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                `;
+            }
+        };
+        
+        // Render sections with videos inline (after text content)
         const sections = contentJson.sections.map(section => {
             const content = MarkdownRenderer.render(section.content || '');
+            
+            // Render section-level videos (appear after text, before images)
+            let videosHtml = '';
+            if (section.videos && section.videos.length > 0) {
+                videosHtml = `
+                    <div class="section-videos">
+                        ${section.videos.map(vid => {
+                            const vidId = this.extractVideoId(vid.url);
+                            return renderVideo({
+                                url: vid.url,
+                                title: vid.title,
+                                type: vid.type || (vidId ? 'youtube' : 'r2')
+                            });
+                        }).join('')}
+                    </div>
+                `;
+            }
+            
+            // Render table if present in section (structured data)
+            let tableHtml = '';
+            if (section.table && section.table.headers && section.table.rows) {
+                tableHtml = `
+                    <div class="table-wrapper">
+                        <table class="lesson-table">
+                            <thead>
+                                <tr class="table-header">
+                                    ${section.table.headers.map(h => `<th>${h}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${section.table.rows.map(row => `
+                                    <tr>
+                                        ${row.map(cell => `<td>${cell}</td>`).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
             
             // Render images if present in section (using embedded Base64 images)
             let imagesHtml = '';
@@ -330,10 +414,28 @@ const LessonRenderer = {
                 <div class="lesson-section">
                     <h3>${section.title}</h3>
                     ${content}
+                    ${tableHtml}
+                    ${videosHtml}
                     ${imagesHtml}
                 </div>
             `;
         }).join('');
+        
+        // Top-level video (only if no section-level videos exist) - for backward compatibility
+        let topLevelVideo = '';
+        const hasSectionVideos = contentJson.sections.some(s => s.videos && s.videos.length > 0);
+        if (contentJson.video_url && !hasSectionVideos) {
+            const videoId = this.extractVideoId(contentJson.video_url);
+            topLevelVideo = `
+                <div class="lesson-videos-section">
+                    ${renderVideo({
+                        url: contentJson.video_url,
+                        title: null,
+                        type: contentJson.video_type || (videoId ? 'youtube' : 'r2')
+                    })}
+                </div>
+            `;
+        }
         
         // Key points section
         let keyPoints = '';
@@ -387,6 +489,7 @@ const LessonRenderer = {
         return `
             <div class="lesson-card">
                 ${sections}
+                ${topLevelVideo}
                 ${keyPoints}
                 ${topLevelImages}
                 ${resources}
@@ -401,18 +504,59 @@ const LessonRenderer = {
         const videoUrl = contentJson?.video_url || '';
         const videoId = this.extractVideoId(videoUrl);
         
+        // Collect all videos: top-level video_url + section-level videos
+        let allVideos = [];
+        
+        // Add top-level video if it exists
+        if (videoUrl) {
+            allVideos.push({ url: videoUrl, title: lesson.title, type: videoId ? 'youtube' : 'direct' });
+        }
+        
+        // Add section-level videos
+        if (contentJson?.sections) {
+            contentJson.sections.forEach(section => {
+                if (section.videos && section.videos.length > 0) {
+                    section.videos.forEach(vid => {
+                        const vidId = this.extractVideoId(vid.url);
+                        allVideos.push({
+                            url: vid.url,
+                            title: vid.title || section.title,
+                            type: vid.type || (vidId ? 'youtube' : 'direct')
+                        });
+                    });
+                }
+            });
+        }
+        
         let videoPlayer = '';
-        if (videoId) {
-            videoPlayer = `
-                <div class="video-container">
-                    <iframe 
-                        src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1"
-                        frameborder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowfullscreen
-                    ></iframe>
-                </div>
-            `;
+        if (allVideos.length > 0) {
+            videoPlayer = allVideos.map(vid => {
+                if (vid.type === 'youtube' || this.extractVideoId(vid.url)) {
+                    const vidId = this.extractVideoId(vid.url);
+                    return `
+                        <div class="video-container">
+                            ${vid.title && allVideos.length > 1 ? `<h4 class="video-title">${vid.title}</h4>` : ''}
+                            <iframe 
+                                src="https://www.youtube.com/embed/${vidId}?rel=0&modestbranding=1"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowfullscreen
+                            ></iframe>
+                        </div>
+                    `;
+                } else {
+                    // Direct video (R2 or other hosted video)
+                    return `
+                        <div class="video-container video-container-direct">
+                            ${vid.title && allVideos.length > 1 ? `<h4 class="video-title">${vid.title}</h4>` : ''}
+                            <video controls preload="metadata" playsinline>
+                                <source src="${vid.url}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
+                    `;
+                }
+            }).join('');
         } else {
             videoPlayer = `
                 <div class="video-placeholder">
@@ -506,8 +650,8 @@ const LessonRenderer = {
         
         return `
             <div class="lesson-card">
-                ${videoPlayer}
                 ${description}
+                ${videoPlayer}
                 ${keyPoints}
                 ${topLevelImages}
                 ${resources}

@@ -1213,3 +1213,101 @@
         margin-left: var(--space-6);
     }
 }
+
+/* ============================================
+   VIDEO PLAYER STYLES
+   ============================================ */
+
+/* YouTube embed container - 16:9 aspect ratio */
+.video-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    margin-bottom: var(--space-6);
+    background: var(--gray-900);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.video-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Direct video container (R2/hosted videos) */
+.video-container-direct {
+    padding-bottom: 0;
+    aspect-ratio: 16 / 9;
+}
+
+.video-container-direct video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: var(--gray-900);
+}
+
+/* Video title when multiple videos */
+.video-title {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: var(--space-3) var(--space-4);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1;
+    margin: 0;
+}
+
+/* Placeholder for missing videos */
+.video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    background: var(--gray-100);
+    border-radius: 12px;
+    color: var(--gray-500);
+    margin-bottom: var(--space-6);
+}
+
+.video-placeholder i {
+    font-size: 48px;
+    margin-bottom: var(--space-3);
+    opacity: 0.5;
+}
+
+.video-placeholder p {
+    font-size: 16px;
+    margin: 0;
+}
+
+/* Video container spacing when multiple videos */
+.video-container + .video-container {
+    margin-top: var(--space-6);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .video-container {
+        border-radius: 8px;
+        margin-bottom: var(--space-4);
+    }
+    
+    .video-placeholder {
+        min-height: 200px;
+    }
+    
+    .video-placeholder i {
+        font-size: 36px;
+    }
+}

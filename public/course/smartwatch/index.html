@@ -2471,14 +2471,36 @@
             color: var(--navy);
         }
 
-        /* Code Blocks */
+        /* Code Blocks - GitHub-inspired dark theme */
         .code-block {
             position: relative;
-            background: var(--navy);
-            border-radius: var(--radius-md);
+            background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+            border-radius: 12px;
             margin: 24px 0;
-            margin-bottom: 1.5rem;
             overflow: hidden;
+            border: 1px solid #30363d;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .code-block::before {
+            content: '';
+            display: block;
+            height: 36px;
+            background: linear-gradient(180deg, #21262d 0%, #161b22 100%);
+            border-bottom: 1px solid #30363d;
+            position: relative;
+        }
+        
+        .code-block::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            width: 12px;
+            height: 12px;
+            background: #ff5f56;
+            border-radius: 50%;
+            box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27ca40;
         }
         
         .code-block + .code-block {
@@ -2487,12 +2509,64 @@
 
         .code-block code {
             display: block;
-            padding: 24px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
+            padding: 20px 24px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+            font-size: 14px;
             line-height: 1.7;
             overflow-x: auto;
-            color: #e2e8f0;
+            color: #e6edf3;
+            white-space: pre;
+            word-wrap: normal;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* GitHub-style syntax highlighting */
+        .code-block code .token.keyword {
+            color: #ff7b72;
+            font-weight: 500;
+        }
+        
+        .code-block code .token.function {
+            color: #d2a8ff;
+        }
+        
+        .code-block code .token.string {
+            color: #a5d6ff;
+        }
+        
+        .code-block code .token.comment {
+            color: #8b949e;
+            font-style: italic;
+        }
+        
+        .code-block code .token.number {
+            color: #79c0ff;
+        }
+        
+        .code-block code .token.operator {
+            color: #ff7b72;
+        }
+        
+        .code-block code .token.punctuation {
+            color: #c9d1d9;
+        }
+        
+        .code-block code .token.class-name,
+        .code-block code .token.type {
+            color: #ffa657;
+        }
+        
+        .code-block code .token.variable {
+            color: #ffa657;
+        }
+        
+        .code-block code .token.constant {
+            color: #79c0ff;
+        }
+        
+        .code-block code .token.preprocessor {
+            color: #ff7b72;
         }
         
         /* Nested bullet lists - I2C and other indented content */
@@ -2530,21 +2604,20 @@
 
         .lesson-image {
             margin: 0;
-            /* Constrain image container size - thumbnail style */
-            max-width: 280px;
-            flex: 0 1 auto;
-            position: relative;
             background: var(--white);
             border-radius: var(--radius-md);
             overflow: hidden;
             border: 1px solid var(--gray-200);
             transition: box-shadow 0.3s ease, transform 0.3s ease;
             box-shadow: var(--shadow-sm);
+            /* Constrain image container size - thumbnail style */
+            max-width: 280px;
+            flex: 0 1 auto;
         }
 
         .lesson-image:hover {
-            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
         }
 
         .lesson-image img {
@@ -2562,6 +2635,10 @@
         }
 
         /* Expand icon overlay on hover */
+        .lesson-image {
+            position: relative;
+        }
+
         .lesson-image::after {
             content: '\f065'; /* FontAwesome expand icon */
             font-family: 'Font Awesome 6 Free';
@@ -2595,7 +2672,7 @@
             background: var(--gray-100);
             border-top: 1px solid var(--gray-200);
             text-align: center;
-            line-height: 1.4;
+            line-height: 1.3;
         }
 
         /* Image Modal */
@@ -2733,6 +2810,56 @@
             transition: all 0.2s;
         }
 
+        /* Lesson Tables */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 20px 0;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--gray-200);
+        }
+
+        .lesson-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            background: var(--white);
+        }
+
+        .lesson-table th,
+        .lesson-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .lesson-table th {
+            background: var(--gray-50);
+            font-weight: 600;
+            color: var(--navy);
+            white-space: nowrap;
+        }
+
+        .lesson-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .lesson-table tr:hover td {
+            background: var(--gray-50);
+        }
+
+        .lesson-table td:first-child {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: var(--electric-blue);
+        }
+
+        .lesson-table td:nth-child(3),
+        .lesson-table td:nth-child(4) {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--gray-600);
+        }
+
         .code-block:hover .copy-btn {
             opacity: 1;
         }
@@ -2743,13 +2870,80 @@
         }
 
         .inline-code {
-            background: var(--gray-100);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9em;
-            color: var(--coral);
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.85em;
+            color: #e2e8f0;
+            white-space: nowrap;
+            display: inline;
+            line-height: 1.6;
+            border: 1px solid #334155;
         }
+        
+        /* Inline code in paragraphs - allow wrapping for long code */
+        p .inline-code,
+        li .inline-code {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        /* Standalone code lines - block display with window chrome */
+        .lesson-section p:has(> .inline-code:only-child) {
+            margin: 24px 0;
+            position: relative;
+            background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+            border-radius: 12px;
+            border: 1px solid #30363d;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            padding: 0;
+        }
+        
+        /* Title bar for standalone code */
+        .lesson-section p:has(> .inline-code:only-child)::before {
+            content: '';
+            display: block;
+            height: 36px;
+            background: linear-gradient(180deg, #21262d 0%, #161b22 100%);
+            border-bottom: 1px solid #30363d;
+        }
+        
+        /* Window dots */
+        .lesson-section p:has(> .inline-code:only-child)::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            width: 12px;
+            height: 12px;
+            background: #ff5f56;
+            border-radius: 50%;
+            box-shadow: 20px 0 0 #ffbd2e, 40px 0 0 #27ca40;
+        }
+        
+        .lesson-section > .inline-code,
+        .lesson-section p > .inline-code:only-child {
+            display: block;
+            background: transparent;
+            padding: 16px 24px;
+            border-radius: 0;
+            margin: 0;
+            font-size: 14px;
+            overflow-x: auto;
+            white-space: pre;
+            border: none;
+            box-shadow: none;
+            color: #e6edf3;
+        }
+        
+        /* Syntax highlighting colors for inline code */
+        .inline-code .keyword { color: #ff7b72; }
+        .inline-code .type { color: #79c0ff; }
+        .inline-code .variable { color: #ffa657; }
+        .inline-code .operator { color: #ff7b72; }
+        .inline-code .number { color: #a5d6ff; }
 
         /* Callout Boxes */
         .callout {
@@ -2960,6 +3154,34 @@
             width: 100%;
             height: 100%;
             border: none;
+        }
+
+        /* Direct video (R2 hosted) - not absolute positioning */
+        .video-container.video-container-direct {
+            position: relative;
+            padding-bottom: 0;
+            max-width: 100%;
+            background: #000;
+        }
+
+        .video-container.video-container-direct video {
+            width: 100%;
+            max-height: 500px;
+            display: block;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .video-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray-600);
+            margin-bottom: 12px;
+            padding-left: 4px;
+        }
+
+        .lesson-videos-section {
+            margin-bottom: 24px;
         }
 
         .video-placeholder {
@@ -6427,72 +6649,21 @@
     <script src="/course/course-api.js"></script>
     <script src="/course/course-components.js"></script>
     <script>
-        // Image URL resolver - maps Genspark URLs to embedded Base64 images
-        // This ensures all images are self-contained in the code
-        const IMAGE_URL_MAP = {
-            // Overview
-            'https://www.genspark.ai/api/files/s/2D27gI2m': 'page2_img1',
-            // File Structure
-            'https://www.genspark.ai/api/files/s/GRlXsv6S': 'page5_img1',
-            'https://www.genspark.ai/api/files/s/OpYat2ou': 'page5_img2',
-            'https://www.genspark.ai/api/files/s/JV9pfb30': 'page6_img1',
-            // Pointers
-            'https://www.genspark.ai/api/files/s/YsKE1msu': 'page8_img1',
-            'https://www.genspark.ai/api/files/s/TYGHNi6D': 'page8_img2',
-            'https://www.genspark.ai/api/files/s/Bp3rosBj': 'page9_img1',
-            'https://www.genspark.ai/api/files/s/r35lc3EY': 'page9_img2',
-            'https://www.genspark.ai/api/files/s/DvkMDv39': 'page10_img1',
-            'https://www.genspark.ai/api/files/s/CYKOT8kp': 'page11_img1',
-            // Bit Manipulation
-            'https://www.genspark.ai/api/files/s/Z9xpiYDO': 'page13_img1',
-            'https://www.genspark.ai/api/files/s/wHbEXFla': 'page14_img1',
-            'https://www.genspark.ai/api/files/s/Zo4l8Wm5': 'page14_img2',
-            'https://www.genspark.ai/api/files/s/0XJzPdu7': 'page15_img1',
-            'https://www.genspark.ai/api/files/s/dYzN0ted': 'page15_img2',
-            'https://www.genspark.ai/api/files/s/qDuaF8PU': 'page15_img3',
-            'https://www.genspark.ai/api/files/s/acKfwwo2': 'page15_img4',
-            // I2C
-            'https://www.genspark.ai/api/files/s/8tNSM42D': 'page17_img1',
-            'https://www.genspark.ai/api/files/s/MYY042R8': 'page18_img1',
-            'https://www.genspark.ai/api/files/s/lG8RU3MP': 'page19_img1',
-            // OOP
-            'https://www.genspark.ai/api/files/s/33SvqwyJ': 'page21_img1',
-            'https://www.genspark.ai/api/files/s/tzy3mRia': 'page21_img2',
-            'https://www.genspark.ai/api/files/s/ISx1Ioau': 'page22_img1',
-            'https://www.genspark.ai/api/files/s/msglza9U': 'page23_img1',
-            'https://www.genspark.ai/api/files/s/hE3LKSea': 'page24_img1',
-            'https://www.genspark.ai/api/files/s/QYO4KoAH': 'page25_img1',
-            'https://www.genspark.ai/api/files/s/yrUGzVmm': 'page25_img2',
-            'https://www.genspark.ai/api/files/s/EJF9yowV': 'page26_img1',
-            // RTOS
-            'https://www.genspark.ai/api/files/s/8bBvUCH6': 'page27_img1',
-            'https://www.genspark.ai/api/files/s/gxNq2fg8': 'page27_img2',
-            'https://www.genspark.ai/api/files/s/ytq6UNqw': 'page28_img1',
-            'https://www.genspark.ai/api/files/s/g1V2EvTm': 'page29_img2',
-            // Static/Volatile
-            'https://www.genspark.ai/api/files/s/bZSd5ecR': 'page31_img1',
-            'https://www.genspark.ai/api/files/s/LtJn6Qoc': 'page31_img2',
-            'https://www.genspark.ai/api/files/s/WPGSr9km': 'page32_img1',
-            // Timing
-            'https://www.genspark.ai/api/files/s/sSz0ELmR': 'page33_img1',
-            'https://www.genspark.ai/api/files/s/v99hf3ba': 'page33_img2',
-            'https://www.genspark.ai/api/files/s/VA2HFoaq': 'page34_img1',
-            'https://www.genspark.ai/api/files/s/JLVou8yj': 'page34_img2',
-            'https://www.genspark.ai/api/files/s/ibDfOADR': 'page35_img1',
-            // FSM
-            'https://www.genspark.ai/api/files/s/3OL8Yt1d': 'page38_img1',
-            // Networking
-            'https://www.genspark.ai/api/files/s/52YAFb3q': 'page39_img1',
-            'https://www.genspark.ai/api/files/s/S6mWhW98': 'page40_img1'
-        };
-        
-        // Resolve image URL - returns embedded Base64 if available, otherwise original URL
+        // Image URL resolver - uses embedded: format for self-contained images
+        // Images in database use format: "embedded:image_id" (e.g., "embedded:page2_img1")
+        // UPDATED: Now prefers optimized WebP file images over embedded Base64
+        // This function provides backward compatibility for any inline HTML
         function resolveImageUrl(url) {
             if (!url) return url;
-            const imageId = IMAGE_URL_MAP[url];
-            if (imageId && typeof EMBEDDED_IMAGES !== 'undefined' && EMBEDDED_IMAGES[imageId]) {
-                return EMBEDDED_IMAGES[imageId].dataUri;
+            
+            // Handle embedded: format - use optimized WebP files
+            if (url.startsWith('embedded:')) {
+                const imageId = url.replace('embedded:', '');
+                // Return path to optimized WebP image file
+                return '/images/course/smartwatch/' + imageId + '.webp';
             }
+            
+            // Return original URL for external images
             return url;
         }
     </script>
@@ -6554,8 +6725,9 @@
                 } else if (currentViewMode === 'full') {
                     setViewMode('full');
                 } else {
-                    // Show intro section by default (first time opening course)
-                    renderIntroSection();
+                    // Load Introduction lesson by default (first lesson in Overview module)
+                    setViewMode('module');
+                    await loadLesson('lesson-overview-intro');
                 }
                 
             } catch (error) {
@@ -7410,6 +7582,38 @@
                             const renderedContent = MarkdownRenderer.render(section.content || '');
                             sectionHtml += `<h3>${section.title}</h3>${renderedContent}`;
                             
+                            // Render table if present in section (structured data)
+                            if (section.table && section.table.headers && section.table.rows) {
+                                sectionHtml += '<div class="table-wrapper"><table class="lesson-table">';
+                                sectionHtml += '<thead><tr class="table-header">';
+                                sectionHtml += section.table.headers.map(h => `<th>${h}</th>`).join('');
+                                sectionHtml += '</tr></thead><tbody>';
+                                sectionHtml += section.table.rows.map(row => 
+                                    '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>'
+                                ).join('');
+                                sectionHtml += '</tbody></table></div>';
+                            }
+                            
+                            // Render section videos (appear after text and table)
+                            if (section.videos && section.videos.length) {
+                                sectionHtml += '<div class="section-videos">';
+                                sectionHtml += section.videos.map(vid => {
+                                    const vidId = extractYouTubeId(vid.url);
+                                    if (vidId) {
+                                        return `<div class="video-container">
+                                            ${vid.title ? `<h4 class="video-title">${vid.title}</h4>` : ''}
+                                            <iframe src="https://www.youtube.com/embed/${vidId}?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                        </div>`;
+                                    } else {
+                                        return `<div class="video-container video-container-direct">
+                                            ${vid.title ? `<h4 class="video-title">${vid.title}</h4>` : ''}
+                                            <video controls preload="metadata" playsinline><source src="${vid.url}" type="video/mp4">Your browser does not support video.</video>
+                                        </div>`;
+                                    }
+                                }).join('');
+                                sectionHtml += '</div>';
+                            }
+                            
                             // Render images if present in section (using embedded Base64 images)
                             if (section.images && section.images.length) {
                                 sectionHtml += '<div class="section-images">';
@@ -7526,6 +7730,8 @@
                         </div>
                     </div>
                     
+                    ${content ? `<div class="overview-lesson-content">${content}</div>` : ''}
+                    
                     ${videoId ? `
                         <div class="overview-video-container" data-video-id="${videoId}">
                             <div class="overview-video-placeholder" onclick="loadLazyVideo(this, '${videoId}')">
@@ -7534,8 +7740,6 @@
                             </div>
                         </div>
                     ` : ''}
-                    
-                    ${content ? `<div class="overview-lesson-content">${content}</div>` : ''}
                     
                     <div class="overview-lesson-actions">
                         ${actions}
