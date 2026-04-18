@@ -67,16 +67,20 @@ const ImageResolver = {
         'https://www.genspark.ai/api/files/s/S6mWhW98': 'page40_img1'
     },
     
+    // Base path for optimized WebP images
+    webpBasePath: '/images/course/smartwatch/',
+    
     /**
-     * Resolve image URL - returns embedded Base64 if available, otherwise original URL
+     * Resolve image URL - prefers optimized WebP files, falls back to embedded Base64
      * @param {string} url - The original image URL
-     * @returns {string} The resolved URL (Base64 data URI or original)
+     * @returns {string} The resolved URL (WebP file path, Base64 data URI, or original)
      */
     resolve(url) {
         if (!url) return url;
         const imageId = this.urlMap[url];
-        if (imageId && typeof EMBEDDED_IMAGES !== 'undefined' && EMBEDDED_IMAGES[imageId]) {
-            return EMBEDDED_IMAGES[imageId].dataUri;
+        if (imageId) {
+            // PRIORITY: Use optimized WebP file for better quality
+            return this.webpBasePath + imageId + '.webp';
         }
         return url;
     }
@@ -170,6 +174,13 @@ const MarkdownRenderer = {
         if (!text) return '';
         
         let html = text;
+        
+        // Unescape JSON-escaped characters (\\n -> \n, \\t -> \t, etc.)
+        // This handles content that came from JSON with escaped newlines
+        html = html.replace(/\\\\n/g, '\n');
+        html = html.replace(/\\\\t/g, '\t');
+        html = html.replace(/\\\\"/g, '"');
+        html = html.replace(/\\\\/g, '\\');
         
         // Escape HTML first (but preserve our special markers)
         html = this.escapeHtml(html);
