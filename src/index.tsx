@@ -29,7 +29,7 @@ type Bindings = {
   STRIPE_PUBLISHABLE_KEY: string
   ADMIN_EMAILS: string
   RESEND_API_KEY: string
-  HUGGINGFACE_API_KEY: string
+  GROQ_API_KEY: string
 }
 
 type CheckoutSessionWithShippingDetails = Stripe.Checkout.Session & {
@@ -1032,7 +1032,7 @@ app.post('/api/chat', async (c) => {
       return c.json({ error: 'Message is required' }, 400)
     }
 
-    configureChatbot(c.env.HUGGINGFACE_API_KEY || '')
+    configureChatbot(c.env.GROQ_API_KEY || '')
     const reply = await getChatbotReply(message.trim())
 
     return c.json({ reply })

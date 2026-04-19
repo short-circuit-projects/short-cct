@@ -1,13 +1,13 @@
 // src/chatbot/chatbotService.ts
 import { buildPrompt } from './promptBuilder'
-import { huggingFaceChat, setHuggingFaceApiKey } from './providers/huggingface'
+import { groqChat, setGroqApiKey } from './providers/groq'
 
 export function configureChatbot(apiKey: string): void {
-  setHuggingFaceApiKey(apiKey)
+  setGroqApiKey(apiKey)
 }
 
 export async function getChatbotReply(message: string): Promise<string> {
   const prompt = buildPrompt(message)
-  const response = await huggingFaceChat(prompt)
+  const response = await groqChat(prompt)
   return response
 }
