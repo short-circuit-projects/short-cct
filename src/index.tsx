@@ -1032,7 +1032,7 @@ app.post('/api/chat', async (c) => {
       return c.json({ error: 'Message is required' }, 400)
     }
 
-    configureChatbot(c.env.GROQ_API_KEY || '')
+    configureChatbot(c.env.GROQ_API_KEY || '', c.env.DB)
     const reply = await getChatbotReply(message.trim())
 
     return c.json({ reply })

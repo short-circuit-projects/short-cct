@@ -5,9 +5,17 @@ import { GroqProvider } from './providers/groq'
 import type { LLMProvider } from './providers/types'
 
 let provider: LLMProvider | null = null
+let database: D1Database | null = null
 
-export function configureChatbot(apiKey: string): void {
+export function configureChatbot(apiKey: string, db?: D1Database): void {
   provider = new GroqProvider(apiKey)
+  if (db) {
+    database = db
+  }
+}
+
+export function getDatabase(): D1Database | null {
+  return database
 }
 
 export async function getChatbotReply(message: string): Promise<string> {
