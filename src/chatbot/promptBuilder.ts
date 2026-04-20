@@ -1,11 +1,10 @@
 // src/chatbot/promptBuilder.ts
-export function buildPrompt(message: string): string {
+export function buildPrompt(message: string, context: string): string {
   return `SYSTEM:
-You are a helpful assistant for Short Circuit platform.
+You are a helpful tutor for a learning platform.
 
-RULES:
-- Be concise
-- Be beginner-friendly
+CONTEXT:
+${context}
 
 USER:
 ${message}`

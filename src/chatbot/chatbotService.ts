@@ -1,13 +1,22 @@
 // src/chatbot/chatbotService.ts
 import { buildPrompt } from './promptBuilder'
-import { groqChat, setGroqApiKey } from './providers/groq'
+import { getContext } from './contextBuilder'
+import { GroqProvider } from './providers/groq'
+import type { LLMProvider } from './providers/types'
+
+let provider: LLMProvider | null = null
 
 export function configureChatbot(apiKey: string): void {
-  setGroqApiKey(apiKey)
+  provider = new GroqProvider(apiKey)
 }
 
 export async function getChatbotReply(message: string): Promise<string> {
-  const prompt = buildPrompt(message)
-  const response = await groqChat(prompt)
+  if (!provider) {
+    throw new Error('Chatbot provider is not configured')
+  }
+
+  const context = await getContext(message)
+  const prompt = buildPrompt(message, context)
+  const response = await provider.generate(prompt)
   return response
 }
