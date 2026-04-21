@@ -899,12 +899,7 @@ const allowedOriginSet = new Set(ALLOWED_ORIGINS)
 const chatRateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
 const isPagesPreviewOrigin = (origin: string): boolean => {
-  try {
-    const url = new URL(origin)
-    return url.protocol === 'https:' && url.hostname.endsWith('.pages.dev')
-  } catch {
-    return false
-  }
+  return origin.startsWith('https://') && origin.endsWith('.pages.dev')
 }
 
 const isAllowedOrigin = (origin?: string | null): boolean => {
