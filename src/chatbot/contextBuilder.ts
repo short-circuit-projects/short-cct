@@ -13,73 +13,115 @@ const STOP_WORDS = new Set([
   'about', 'as', 'just', 'so', 'than', 'very', 'more', 'most', 'some', 'any'
 ])
 
-interface LessonMatch {
+const GENERIC_WORDS = new Set([
+  'system', 'lesson', 'lessons', 'course', 'courses', 'platform', 'project'
+])
+
+const MAX_CONTEXT_TOKENS = 1400
+const MAX_LESSONS = 3
+const LESSON_SNIPPET_TOKEN_BUDGET = 420
+const STRONG_MATCH_THRESHOLD = 4
+
+const SCORE_WEIGHTS = {
+  titleExact: 5,
+  titlePartial: 3,
+  titleKeyword: 2,
+  contentMatch: 1,
+  multiKeywordBonusCap: 3,
+} as const
+
+type QueryKind = 'full_phrase' | 'phrase' | 'keyword'
+type QueryField = 'title' | 'content_json'
+
+interface LessonRow {
   id: string
   title: string
   content_json: string | null
-  priority: 'title' | 'content'
+}
+
+interface QuerySignal {
+  normalizedMessage: string
+  keywords: string[]
+  phrases: string[]
+  fullPhrase: string
+}
+
+interface QueryTerm {
+  text: string
+  kind: QueryKind
+  field: QueryField
+}
+
+interface LessonMatch extends LessonRow {
   score: number
+  titleHits: number
+  contentHits: number
+  matchedTerms: Set<string>
+  reasons: Set<string>
 }
 
 /**
- * Extract keywords from user message
- * Filters stop words, keeps meaningful terms
+ * Normalize text for matching/scoring.
  */
-function extractKeywords(message: string): string[] {
-  const normalized = message.toLowerCase()
-  const words = normalized
-    .split(/[\s\-\.,;:!?\/\\()[\]{}\"\']+/)
-    .filter(w => w.length > 2 && !STOP_WORDS.has(w))
-  
-  // Remove duplicates and return
-  return [...new Set(words)]
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /**
- * Clean HTML, JSON, Markdown to plain text
+ * Extract keywords and phrases from user message.
+ * Phase 4 keeps both single-word and multi-word signals.
  */
-function cleanContent(content: string): string {
-  try {
-    // If it looks like JSON, try to extract text from it
-    if (content.startsWith('{') || content.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(content)
-        
-        // For video lessons, extract text from description/notes
-        if (parsed.description) {
-          content = parsed.description
-        } else if (parsed.text) {
-          content = parsed.text
-        } else if (parsed.notes) {
-          content = parsed.notes
-        } else if (typeof parsed === 'string') {
-          content = parsed
-        } else {
-          // Stringify and try again
-          content = JSON.stringify(parsed)
-        }
-      } catch {
-        // Not valid JSON, continue with original
-      }
+function extractQuerySignal(message: string): QuerySignal {
+  const normalizedMessage = normalizeText(message)
+  const rawTokens = normalizedMessage.split(' ').filter(Boolean)
+
+  const keywords = [...new Set(
+    rawTokens.filter(token => token.length >= 2 && !STOP_WORDS.has(token))
+  )]
+
+  const phrases = new Set<string>()
+  for (let i = 0; i < keywords.length - 1; i += 1) {
+    const left = keywords[i]
+    const right = keywords[i + 1]
+    if (left && right) {
+      phrases.add(`${left} ${right}`)
     }
+  }
 
-    // Remove HTML tags
+  // Prefer meaningful keywords for full phrase, but do not drop all tokens.
+  const phraseTokens = keywords.filter(token => !GENERIC_WORDS.has(token))
+  const fullPhrase = (phraseTokens.length >= 2 ? phraseTokens : keywords).join(' ').trim()
+
+  return {
+    normalizedMessage,
+    keywords,
+    phrases: [...phrases],
+    fullPhrase,
+  }
+}
+
+/**
+ * Remove markdown, HTML, and oversized code noise.
+ */
+function cleanText(content: string): string {
+  try {
     content = content
+      .replace(/```[\s\S]*?```/g, ' ') // fenced code blocks
+      .replace(/`[^`]+`/g, ' ') // inline code
+      .replace(/^\s{4,}.*$/gm, ' ') // indented code blocks
       .replace(/<[^>]*>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/&quot;/g, '"')
       .replace(/&amp;/g, '&')
       .replace(/&#\d+;/g, ' ')
-
-    // Remove Markdown formatting
-    content = content
       .replace(/^#+\s+/gm, '') // Headers
       .replace(/[*_~`]/g, '') // Emphasis, code
       .replace(/\[([^\]]+)\]\([^\)]*\)/g, '$1') // Links
       .replace(/^\s*[-*+]\s+/gm, '') // Lists
-
-    // Clean up whitespace
-    content = content
       .split(/\s+/)
       .join(' ')
       .trim()
@@ -98,9 +140,48 @@ function estimateTokens(text: string): number {
 }
 
 /**
- * Query lessons from D1 database
+ * Build a query plan for Phase 4 multi-query retrieval.
  */
-async function queryLessons(keywords: string[]): Promise<LessonMatch[]> {
+function buildQueryTerms(signal: QuerySignal): QueryTerm[] {
+  const terms: QueryTerm[] = []
+
+  if (signal.fullPhrase && signal.fullPhrase.length >= 4) {
+    terms.push({ text: signal.fullPhrase, kind: 'full_phrase', field: 'title' })
+    terms.push({ text: signal.fullPhrase, kind: 'full_phrase', field: 'content_json' })
+  }
+
+  for (const phrase of signal.phrases) {
+    if (phrase.length >= 4) {
+      terms.push({ text: phrase, kind: 'phrase', field: 'title' })
+      terms.push({ text: phrase, kind: 'phrase', field: 'content_json' })
+    }
+  }
+
+  for (const keyword of signal.keywords) {
+    if (keyword.length >= 2) {
+      terms.push({ text: keyword, kind: 'keyword', field: 'title' })
+      terms.push({ text: keyword, kind: 'keyword', field: 'content_json' })
+    }
+  }
+
+  const dedup = new Map<string, QueryTerm>()
+  for (const term of terms) {
+    dedup.set(`${term.kind}|${term.field}|${term.text}`, term)
+  }
+
+  return [...dedup.values()]
+}
+
+function queryLimit(kind: QueryKind): number {
+  if (kind === 'full_phrase') return 8
+  if (kind === 'phrase') return 6
+  return 4
+}
+
+/**
+ * Query lessons from D1 using multiple retrieval strategies.
+ */
+async function queryCandidateLessons(signal: QuerySignal): Promise<LessonRow[]> {
   const db = getDatabase()
   if (!db) {
     console.warn('Database not configured in context builder')
@@ -108,144 +189,254 @@ async function queryLessons(keywords: string[]): Promise<LessonMatch[]> {
   }
 
   try {
-    const results: LessonMatch[] = []
-    
-    // Try each keyword and collect matches
-    for (const keyword of keywords) {
-      const pattern = `%${keyword}%`
-      
-      // Query by title (higher priority)
-      try {
-        const titleResults = await db
-          .prepare(
-            `SELECT id, title, content_json, 'title' as priority, 1 as score
-             FROM lessons
-             WHERE is_published = 1 AND title LIKE ?
-             LIMIT 2`
-          )
-          .bind(pattern)
-          .all()
-        
-        if (titleResults.success && titleResults.results) {
-          for (const row of titleResults.results) {
-            results.push({
-              id: (row as any).id,
-              title: (row as any).title,
-              content_json: (row as any).content_json,
-              priority: 'title',
-              score: 1
-            })
-          }
-        }
-      } catch (e) {
-        console.error('Title query error:', e)
-      }
+    const terms = buildQueryTerms(signal)
+    const candidates = new Map<string, LessonRow>()
 
-      // Query by content (lower priority, only if no title matches yet)
-      if (results.length === 0) {
-        try {
-          const contentResults = await db
-            .prepare(
-              `SELECT id, title, content_json, 'content' as priority, 0.5 as score
-               FROM lessons
-               WHERE is_published = 1 AND content_json LIKE ?
-               LIMIT 2`
-            )
-            .bind(pattern)
-            .all()
-          
-          if (contentResults.success && contentResults.results) {
-            for (const row of contentResults.results) {
-              results.push({
-                id: (row as any).id,
-                title: (row as any).title,
-                content_json: (row as any).content_json,
-                priority: 'content',
-                score: 0.5
+    for (const term of terms) {
+      const field = term.field === 'title' ? 'title' : 'content_json'
+      const limit = queryLimit(term.kind)
+
+      try {
+        const rows = await db
+          .prepare(
+            `SELECT id, title, content_json
+             FROM lessons
+             WHERE is_published = 1
+               AND lower(${field}) LIKE ?
+             LIMIT ?`
+          )
+          .bind(`%${term.text}%`, limit)
+          .all()
+
+        if (rows.success && rows.results) {
+          for (const row of rows.results) {
+            const lesson = row as unknown as LessonRow
+            if (!candidates.has(lesson.id)) {
+              candidates.set(lesson.id, {
+                id: lesson.id,
+                title: lesson.title,
+                content_json: lesson.content_json,
               })
             }
           }
-        } catch (e) {
-          console.error('Content query error:', e)
         }
+      } catch (queryError) {
+        console.error('Phase 4 query error:', queryError)
       }
-      
-      // Stop if we have good results
-      if (results.length >= 2) {
+
+      if (candidates.size >= 40) {
         break
       }
     }
 
-    return results
+    return [...candidates.values()]
   } catch (error) {
-    console.error('Error querying lessons:', error)
+    console.error('Error querying candidate lessons:', error)
     return []
   }
 }
 
 /**
- * Format lessons into context string with token budget
+ * Score one lesson based on title/content matches.
  */
-function formatContext(lessons: LessonMatch[], maxTokens: number = 1500): string {
+function scoreLesson(lesson: LessonRow, signal: QuerySignal): LessonMatch {
+  const titleNorm = normalizeText(lesson.title)
+  const contentNorm = normalizeText(lesson.content_json ?? '')
+
+  const reasons = new Set<string>()
+  const matchedTerms = new Set<string>()
+  let score = 0
+  let titleHits = 0
+  let contentHits = 0
+
+  if (signal.fullPhrase.length >= 4) {
+    if (titleNorm === signal.fullPhrase) {
+      score += SCORE_WEIGHTS.titleExact
+      titleHits += 1
+      matchedTerms.add(signal.fullPhrase)
+      reasons.add('title_exact')
+    } else if (titleNorm.includes(signal.fullPhrase)) {
+      score += SCORE_WEIGHTS.titlePartial
+      titleHits += 1
+      matchedTerms.add(signal.fullPhrase)
+      reasons.add('title_partial_phrase')
+    }
+
+    if (contentNorm.includes(signal.fullPhrase)) {
+      score += SCORE_WEIGHTS.contentMatch
+      contentHits += 1
+      matchedTerms.add(signal.fullPhrase)
+      reasons.add('content_phrase')
+    }
+  }
+
+  for (const phrase of signal.phrases) {
+    if (titleNorm.includes(phrase)) {
+      score += SCORE_WEIGHTS.titlePartial
+      titleHits += 1
+      matchedTerms.add(phrase)
+      reasons.add('title_phrase')
+    }
+    if (contentNorm.includes(phrase)) {
+      score += SCORE_WEIGHTS.contentMatch
+      contentHits += 1
+      matchedTerms.add(phrase)
+      reasons.add('content_phrase')
+    }
+  }
+
+  for (const keyword of signal.keywords) {
+    const titleKeywordRegex = new RegExp(`\\b${keyword}\\b`, 'i')
+    if (titleKeywordRegex.test(titleNorm)) {
+      score += SCORE_WEIGHTS.titleKeyword
+      titleHits += 1
+      matchedTerms.add(keyword)
+      reasons.add('title_keyword')
+    }
+
+    if (contentNorm.includes(keyword)) {
+      score += SCORE_WEIGHTS.contentMatch
+      contentHits += 1
+      matchedTerms.add(keyword)
+      reasons.add('content_keyword')
+    }
+  }
+
+  if (matchedTerms.size > 1) {
+    score += Math.min(matchedTerms.size - 1, SCORE_WEIGHTS.multiKeywordBonusCap)
+    reasons.add('multi_term_bonus')
+  }
+
+  return {
+    ...lesson,
+    score,
+    titleHits,
+    contentHits,
+    matchedTerms,
+    reasons,
+  }
+}
+
+function pushPriorityChunk(chunks: Array<{ priority: number; text: string }>, value: unknown, priority: number): void {
+  if (!value) return
+
+  if (typeof value === 'string') {
+    const cleaned = cleanText(value)
+    if (cleaned) {
+      chunks.push({ priority, text: cleaned })
+    }
+    return
+  }
+
+  if (Array.isArray(value)) {
+    const arrayText = cleanText(value.map(item => (typeof item === 'string' ? item : JSON.stringify(item))).join(' | '))
+    if (arrayText) {
+      chunks.push({ priority, text: arrayText })
+    }
+  }
+}
+
+/**
+ * Prioritize objective/key points/explanation text from structured lesson JSON.
+ */
+function extractLessonSummary(rawContent: string | null): string {
+  if (!rawContent) {
+    return ''
+  }
+
+  const chunks: Array<{ priority: number; text: string }> = []
+
+  try {
+    const parsed = JSON.parse(rawContent) as Record<string, unknown>
+
+    pushPriorityChunk(chunks, parsed.objective, 5)
+    pushPriorityChunk(chunks, parsed.objectives, 5)
+    pushPriorityChunk(chunks, parsed.key_points, 5)
+    pushPriorityChunk(chunks, parsed.keyPoints, 5)
+    pushPriorityChunk(chunks, parsed.explanation, 4)
+    pushPriorityChunk(chunks, parsed.overview, 4)
+    pushPriorityChunk(chunks, parsed.summary, 4)
+    pushPriorityChunk(chunks, parsed.background, 4)
+    pushPriorityChunk(chunks, parsed.description, 3)
+
+    const sections = parsed.sections
+    if (Array.isArray(sections)) {
+      for (const section of sections) {
+        if (!section || typeof section !== 'object') continue
+        const sectionObj = section as Record<string, unknown>
+        const heading = String(sectionObj.title ?? sectionObj.heading ?? sectionObj.name ?? '').trim()
+        const body = String(sectionObj.content ?? sectionObj.text ?? sectionObj.description ?? '').trim()
+        const joined = `${heading ? `${heading}: ` : ''}${body}`.trim()
+
+        if (joined) {
+          const priority = /objective|key point|explanation|overview|concept|summary/i.test(heading) ? 4 : 2
+          pushPriorityChunk(chunks, joined, priority)
+        }
+      }
+    }
+
+    if (chunks.length === 0) {
+      return cleanText(rawContent)
+    }
+
+    chunks.sort((a, b) => b.priority - a.priority)
+    return chunks.map(chunk => chunk.text).join(' ')
+  } catch {
+    return cleanText(rawContent)
+  }
+}
+
+/**
+ * Select top lessons with score + diversity constraints.
+ */
+function selectTopLessons(scored: LessonMatch[]): LessonMatch[] {
+  const sorted = [...scored].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    if (b.titleHits !== a.titleHits) return b.titleHits - a.titleHits
+    return b.contentHits - a.contentHits
+  })
+
+  const selected: LessonMatch[] = []
+  for (const lesson of sorted) {
+    if (selected.length >= MAX_LESSONS) break
+    if (selected.some(item => item.id === lesson.id)) continue
+    selected.push(lesson)
+  }
+
+  return selected
+}
+
+/**
+ * Build context string under token budget.
+ */
+function formatContext(lessons: LessonMatch[], maxTokens: number = MAX_CONTEXT_TOKENS): string {
   if (lessons.length === 0) {
     return ''
   }
 
-  // Deduplicate by id
-  const seen = new Set<string>()
-  const unique = lessons.filter(l => {
-    if (seen.has(l.id)) return false
-    seen.add(l.id)
-    return true
-  })
-
-  // Sort by priority (title first) then by score
-  unique.sort((a, b) => {
-    if (a.priority !== b.priority) {
-      return a.priority === 'title' ? -1 : 1
-    }
-    return b.score - a.score
-  })
-
-  // Take top 3 lessons
-  const topLessons = unique.slice(0, 3)
-
-  let contextLines: string[] = []
   let tokenCount = 0
+  const blocks: string[] = []
 
-  for (const lesson of topLessons) {
-    // Clean content
-    let contentText = ''
-    if (lesson.content_json) {
-      contentText = cleanContent(lesson.content_json)
-    }
+  for (const lesson of lessons) {
+    const summary = extractLessonSummary(lesson.content_json)
+    const maxLessonChars = LESSON_SNIPPET_TOKEN_BUDGET * 4
+    const snippet = summary.slice(0, maxLessonChars).trim()
+    const block = `Lesson: ${lesson.title}\n${snippet || '(No content preview available)'}`
+    const blockTokens = estimateTokens(block)
 
-    // Truncate content to reasonable size
-    const contentPreview = contentText.substring(0, 500)
-    
-    // Build lesson block
-    const lessonBlock = `Lesson: ${lesson.title}
-${contentPreview ? contentPreview + '...' : '(No content preview available)'}`
-
-    const blockTokens = estimateTokens(lessonBlock)
-    
-    // Check if adding this lesson exceeds budget
     if (tokenCount + blockTokens > maxTokens) {
-      // Try to fit what we can
-      const remaining = maxTokens - tokenCount
-      if (remaining > 100) {
-        // Add shortened version
-        const shortened = lessonBlock.substring(0, remaining * 4)
-        contextLines.push(shortened + '...')
+      const remainingTokens = maxTokens - tokenCount
+      if (remainingTokens >= 80) {
+        blocks.push(`${block.slice(0, remainingTokens * 4).trim()}...`)
       }
       break
     }
 
-    contextLines.push(lessonBlock)
+    blocks.push(block)
     tokenCount += blockTokens
   }
 
-  return contextLines.join('\n\n')
+  return blocks.join('\n\n')
 }
 
 /**
@@ -253,24 +444,50 @@ ${contentPreview ? contentPreview + '...' : '(No content preview available)'}`
  */
 export async function getContext(message: string): Promise<string> {
   try {
-    // Extract keywords
-    const keywords = extractKeywords(message)
-    
-    if (keywords.length === 0) {
-      // No meaningful keywords, return empty context
+    const signal = extractQuerySignal(message)
+
+    if (signal.keywords.length === 0) {
+      console.log({
+        phase: 'contextBuilder-v4',
+        keywords: [],
+        matches: [],
+      })
       return ''
     }
 
-    // Query lessons
-    const matches = await queryLessons(keywords)
-    
-    // Format and truncate
-    const context = formatContext(matches, 1500)
-    
-    return context
+    const candidates = await queryCandidateLessons(signal)
+    const scoredMatches = candidates.map(candidate => scoreLesson(candidate, signal))
+    const ranked = selectTopLessons(scoredMatches)
+
+    console.log({
+      phase: 'contextBuilder-v4',
+      keywords: signal.keywords,
+      phrases: signal.phrases,
+      fullPhrase: signal.fullPhrase,
+      matches: ranked.map(match => ({
+        id: match.id,
+        title: match.title,
+        score: match.score,
+        titleHits: match.titleHits,
+        contentHits: match.contentHits,
+        reasons: [...match.reasons],
+      })),
+    })
+
+    const strongMatches = ranked.filter(match => match.score >= STRONG_MATCH_THRESHOLD)
+    if (strongMatches.length > 0) {
+      return formatContext(strongMatches, MAX_CONTEXT_TOKENS)
+    }
+
+    // Fallback strategy: return a minimal best guess if any weak match exists.
+    if (ranked.length > 0) {
+      return formatContext([ranked[0]], Math.min(MAX_CONTEXT_TOKENS, 350))
+    }
+
+    // No match fallback.
+    return ''
   } catch (error) {
     console.error('Error in getContext:', error)
-    // Fail gracefully - return empty string instead of throwing
     return ''
   }
 }
