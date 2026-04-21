@@ -896,6 +896,32 @@ const ALLOWED_ORIGINS = [
 ]
 
 const allowedOriginSet = new Set(ALLOWED_ORIGINS)
+const chatRateLimitStore = new Map<string, { count: number; resetAt: number }>()
+
+const chatRateLimit = async (c: any, next: any) => {
+  const cfConnectingIp = c.req.header('CF-Connecting-IP')
+  const forwardedFor = c.req.header('X-Forwarded-For')
+  const clientIp = cfConnectingIp || forwardedFor?.split(',')[0]?.trim() || 'unknown'
+  const now = Date.now()
+  const windowMs = 60_000
+  const maxRequests = 10
+
+  const current = chatRateLimitStore.get(clientIp)
+
+  if (!current || now >= current.resetAt) {
+    chatRateLimitStore.set(clientIp, { count: 1, resetAt: now + windowMs })
+    return next()
+  }
+
+  if (current.count >= maxRequests) {
+    console.log('Chat rate limit exceeded', { clientIp, timestamp: now })
+    return c.json({ error: 'Rate limit exceeded' }, 429)
+  }
+
+  current.count += 1
+  chatRateLimitStore.set(clientIp, current)
+  return next()
+}
 
 // ============================================
 // SECURITY HEADERS MIDDLEWARE
@@ -1003,6 +1029,7 @@ app.use('/api/*', csrfProtection)
 // ============================================
 
 // Chatbot endpoint - accepts user message and returns AI-generated reply
+app.use('/api/chat', chatRateLimit)
 app.post('/api/chat', async (c) => {
   try {
     const body = await c.req.json().catch(() => null)
