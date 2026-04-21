@@ -885,6 +885,18 @@ const PRODUCTS: Record<string, {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://shortcircuit-2t9.pages.dev',
+  'https://shortcircuits.org',
+  'https://www.shortcircuits.org',
+  'https://shortcct.com',
+  'https://www.shortcct.com',
+]
+
+const allowedOriginSet = new Set(ALLOWED_ORIGINS)
+
 // ============================================
 // SECURITY HEADERS MIDDLEWARE
 // ============================================
@@ -918,37 +930,25 @@ app.use('*', async (c, next) => {
   c.header('Content-Security-Policy', csp)
 })
 
-// Enable CORS for API routes - restricted to specific domains
+// Reject browser requests from disallowed origins.
+app.use('/api/*', async (c, next) => {
+  const origin = c.req.header('Origin')
+  if (origin && !allowedOriginSet.has(origin)) {
+    return c.json({ error: 'Origin not allowed' }, 403)
+  }
+  await next()
+})
+
+// CORS for API routes with strict allowlist.
 app.use('/api/*', cors({
   origin: (origin) => {
-    const allowedOrigins = [
-      'https://shortcircuit-2t9.pages.dev',
-      'https://shortcircuits.org',
-      'https://www.shortcircuits.org',
-      'https://shortcct.com',
-      'https://www.shortcct.com',
-      // Development origins
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-    ]
-    // Allow requests with no origin (mobile apps, Postman, etc.) or from allowed origins
-    if (!origin || allowedOrigins.includes(origin)) {
-      return origin || allowedOrigins[0]
-    }
-    // Also allow any *.pages.dev subdomain for preview deployments
-    if (origin.endsWith('.pages.dev')) {
+    if (origin && allowedOriginSet.has(origin)) {
       return origin
     }
-    // Also allow sandbox URLs for development
-    if (origin.includes('.sandbox.novita.ai') || origin.includes('.e2b.dev')) {
-      return origin
-    }
-    return allowedOrigins[0]
+    return undefined
   },
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'stripe-signature', 'X-CSRF-Token'],
-  credentials: true,
-  maxAge: 86400, // Cache preflight for 24 hours
+  allowMethods: ['GET', 'POST'],
+  allowHeaders: ['Content-Type'],
 }))
 
 // Apply auth middleware to all API routes
@@ -974,7 +974,7 @@ const csrfProtection = async (c: any, next: any) => {
   }
   
   // Skip CSRF for public endpoints that don't require auth
-  const publicPaths = ['/api/auth/signup', '/api/auth/login', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/subscribe']
+  const publicPaths = ['/api/auth/signup', '/api/auth/login', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/subscribe', '/api/chat']
   if (publicPaths.some(path => c.req.path === path)) {
     return next()
   }
@@ -982,30 +982,10 @@ const csrfProtection = async (c: any, next: any) => {
   const origin = c.req.header('Origin')
   const referer = c.req.header('Referer')
   
-  const allowedOrigins = [
-    'https://shortcircuit-2t9.pages.dev',
-    'https://shortcircuits.org',
-    'https://www.shortcircuits.org',
-    'https://shortcct.com',
-    'https://www.shortcct.com',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-  ]
-  
   // Check if origin or referer is from allowed domains
-  const isValidOrigin = origin && (
-    allowedOrigins.includes(origin) ||
-    origin.endsWith('.pages.dev') ||
-    origin.includes('.sandbox.novita.ai') ||
-    origin.includes('.e2b.dev')
-  )
-  
-  const isValidReferer = referer && (
-    allowedOrigins.some(o => referer.startsWith(o)) ||
-    referer.includes('.pages.dev') ||
-    referer.includes('.sandbox.novita.ai') ||
-    referer.includes('.e2b.dev')
-  )
+  const isValidOrigin = origin && allowedOriginSet.has(origin)
+
+  const isValidReferer = referer && ALLOWED_ORIGINS.some(o => referer.startsWith(o))
   
   if (!isValidOrigin && !isValidReferer) {
     console.warn('CSRF check failed - invalid origin/referer:', { origin, referer, path: c.req.path })
