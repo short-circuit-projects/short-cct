@@ -898,6 +898,33 @@ const ALLOWED_ORIGINS = [
 const allowedOriginSet = new Set(ALLOWED_ORIGINS)
 const chatRateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
+const isPagesPreviewOrigin = (origin: string): boolean => {
+  try {
+    const url = new URL(origin)
+    return url.protocol === 'https:' && url.hostname.endsWith('.pages.dev')
+  } catch {
+    return false
+  }
+}
+
+const isAllowedOrigin = (origin?: string | null): boolean => {
+  if (!origin) {
+    return true
+  }
+  return allowedOriginSet.has(origin) || isPagesPreviewOrigin(origin)
+}
+
+const isAllowedReferer = (referer?: string | null): boolean => {
+  if (!referer) {
+    return false
+  }
+  try {
+    return isAllowedOrigin(new URL(referer).origin)
+  } catch {
+    return false
+  }
+}
+
 const chatRateLimit = async (c: any, next: any) => {
   const cfConnectingIp = c.req.header('CF-Connecting-IP')
   const forwardedFor = c.req.header('X-Forwarded-For')
@@ -959,7 +986,7 @@ app.use('*', async (c, next) => {
 // Reject browser requests from disallowed origins.
 app.use('/api/*', async (c, next) => {
   const origin = c.req.header('Origin')
-  if (origin && !allowedOriginSet.has(origin)) {
+  if (!isAllowedOrigin(origin)) {
     return c.json({ error: 'Origin not allowed' }, 403)
   }
   await next()
@@ -968,7 +995,7 @@ app.use('/api/*', async (c, next) => {
 // CORS for API routes with strict allowlist.
 app.use('/api/*', cors({
   origin: (origin) => {
-    if (origin && allowedOriginSet.has(origin)) {
+    if (origin && isAllowedOrigin(origin)) {
       return origin
     }
     return undefined
@@ -1009,9 +1036,8 @@ const csrfProtection = async (c: any, next: any) => {
   const referer = c.req.header('Referer')
   
   // Check if origin or referer is from allowed domains
-  const isValidOrigin = origin && allowedOriginSet.has(origin)
-
-  const isValidReferer = referer && ALLOWED_ORIGINS.some(o => referer.startsWith(o))
+  const isValidOrigin = origin ? isAllowedOrigin(origin) : false
+  const isValidReferer = isAllowedReferer(referer)
   
   if (!isValidOrigin && !isValidReferer) {
     console.warn('CSRF check failed - invalid origin/referer:', { origin, referer, path: c.req.path })
