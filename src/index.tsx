@@ -1032,20 +1032,27 @@ app.use('/api/*', csrfProtection)
 app.use('/api/chat', chatRateLimit)
 app.post('/api/chat', async (c) => {
   try {
+    const clientIp = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
+    const timestamp = Date.now()
     const body = await c.req.json().catch(() => null)
-    const message = body?.message
+    const rawMessage = body?.message
+    const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
 
-    if (typeof message !== 'string' || !message.trim()) {
-      return c.json({ error: 'Message is required' }, 400)
+    console.log('Chat request', { message, timestamp, clientIp })
+
+    if (typeof rawMessage !== 'string' || !message || message.length > 500) {
+      return c.json({ error: 'Invalid message' }, 400)
     }
 
     configureChatbot(c.env.GROQ_API_KEY || '', c.env.DB)
-    const reply = await getChatbotReply(message.trim())
+    const reply = await getChatbotReply(message)
+
+    console.log('Chat response generated', { clientIp, timestamp, message })
 
     return c.json({ reply })
   } catch (error) {
-    console.error('Chatbot route error:', error)
-    return c.json({ error: 'Failed to generate chat response' }, 500)
+    console.error('Chatbot route error', error)
+    return c.json({ reply: 'Something went wrong' }, 500)
   }
 })
 
