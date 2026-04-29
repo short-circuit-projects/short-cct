@@ -86,21 +86,21 @@
     wrapper.setAttribute('data-api-url', '/api/chat');
 
     wrapper.innerHTML =
-      '<div class="sc-chat-panel" data-chat-panel aria-hidden="true" aria-label="ShortCircuit AI chat">' +
+      '<div class="sc-chat-panel" data-chat-panel aria-hidden="true" aria-label="Short Circuit Chatbot">' +
       '  <div class="sc-chat-header">' +
       '    <div>' +
-      '      <h3 class="sc-chat-title">ShortCircuit AI</h3>' +
+      '      <h3 class="sc-chat-title">Short Circuit Chatbot</h3>' +
       '      <span class="sc-chat-status" data-chat-status>Ready</span>' +
       '    </div>' +
       '    <button class="sc-chat-close" type="button" data-chat-close aria-label="Close chat">&times;</button>' +
       '  </div>' +
       '  <div class="sc-chat-messages" data-chat-messages aria-live="polite">' +
       '    <div class="sc-chat-row bot">' +
-      '      <div class="sc-chat-bubble bot">Hi, I am ShortCircuit AI. Ask me about projects, lessons, or platform navigation.</div>' +
+      '      <div class="sc-chat-bubble bot">Welcome to Short Circuit. Ask me about projects, lessons, or platform navigation.</div>' +
       '    </div>' +
       '  </div>' +
       '  <form class="sc-chat-composer" data-chat-composer autocomplete="off">' +
-      '    <input class="sc-chat-input" data-chat-input type="text" name="message" placeholder="Message ShortCircuit AI..." aria-label="Type your message" required>' +
+      '    <input class="sc-chat-input" data-chat-input type="text" name="message" placeholder="Message" aria-label="Type your message" required>' +
       '    <button class="sc-chat-send" data-chat-send type="submit">Send</button>' +
       '  </form>' +
       '</div>' +
