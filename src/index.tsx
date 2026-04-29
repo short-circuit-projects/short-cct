@@ -1,7 +1,10 @@
+/// <reference path="../node_modules/@cloudflare/workers-types/index.d.ts" />
+
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-pages'
 import Stripe from 'stripe'
+import { configureChatbot, getChatbotReply } from './chatbot/chatbotService'
 
 // Auth imports
 import { hashPassword, verifyPassword, isValidEmail, isValidPassword } from './auth/password'
@@ -26,6 +29,21 @@ type Bindings = {
   STRIPE_PUBLISHABLE_KEY: string
   ADMIN_EMAILS: string
   RESEND_API_KEY: string
+  GROQ_API_KEY: string
+}
+
+type CheckoutSessionWithShippingDetails = Stripe.Checkout.Session & {
+  shipping_details?: {
+    name?: string | null
+    address?: {
+      line1?: string | null
+      line2?: string | null
+      city?: string | null
+      state?: string | null
+      postal_code?: string | null
+      country?: string | null
+    } | null
+  } | null
 }
 
 // ============================================
@@ -762,13 +780,13 @@ async function checkModuleCompletion(
       const allModules = await db.prepare(
         'SELECT COUNT(*) as count FROM course_modules WHERE course_id = ?'
       ).bind(courseId).all()
-      const totalModules = allModules.results?.[0]?.count || 0
+      const totalModules = Number(allModules.results?.[0]?.count ?? 0)
       
       const completedModules = await db.prepare(`
         SELECT COUNT(*) as count FROM module_progress 
         WHERE user_id = ? AND course_id = ? AND status = 'completed'
       `).bind(userId, courseId).first<{ count: number }>()
-      const modulesCompleted = completedModules?.count || 0
+      const modulesCompleted = Number(completedModules?.count ?? 0)
       
       const allModulesCompleted = modulesCompleted >= totalModules && totalModules > 0
       
@@ -810,14 +828,15 @@ async function checkModuleCompletion(
     const allModules = await db.prepare(
       'SELECT COUNT(*) as count FROM course_modules WHERE course_id = ?'
     ).bind(courseId).all()
-    const totalModulesCount = allModules.results?.[0]?.count || 0
+    const totalModulesCount = Number(allModules.results?.[0]?.count ?? 0)
     
     const completedModulesCount = await db.prepare(`
       SELECT COUNT(*) as count FROM module_progress 
       WHERE user_id = ? AND course_id = ? AND status = 'completed'
     `).bind(userId, courseId).first<{ count: number }>()
     
-    const allModulesCompleted = (completedModulesCount?.count || 0) >= totalModulesCount && totalModulesCount > 0
+    const completedModulesTotal = Number(completedModulesCount?.count ?? 0)
+    const allModulesCompleted = completedModulesTotal >= totalModulesCount && totalModulesCount > 0
     
     return { moduleCompleted, allModulesCompleted }
   } catch (error) {
@@ -866,6 +885,66 @@ const PRODUCTS: Record<string, {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://shortcircuit-2t9.pages.dev',
+  'https://shortcircuits.org',
+  'https://www.shortcircuits.org',
+  'https://shortcct.com',
+  'https://www.shortcct.com',
+]
+
+const allowedOriginSet = new Set(ALLOWED_ORIGINS)
+const chatRateLimitStore = new Map<string, { count: number; resetAt: number }>()
+
+const isPagesPreviewOrigin = (origin: string): boolean => {
+  return origin.startsWith('https://') && origin.endsWith('.pages.dev')
+}
+
+const isAllowedOrigin = (origin?: string | null): boolean => {
+  if (!origin) {
+    return true
+  }
+  return allowedOriginSet.has(origin) || isPagesPreviewOrigin(origin)
+}
+
+const isAllowedReferer = (referer?: string | null): boolean => {
+  if (!referer) {
+    return false
+  }
+  try {
+    return isAllowedOrigin(new URL(referer).origin)
+  } catch {
+    return false
+  }
+}
+
+const chatRateLimit = async (c: any, next: any) => {
+  const cfConnectingIp = c.req.header('CF-Connecting-IP')
+  const forwardedFor = c.req.header('X-Forwarded-For')
+  const clientIp = cfConnectingIp || forwardedFor?.split(',')[0]?.trim() || 'unknown'
+  const now = Date.now()
+  const windowMs = 60_000
+  const maxRequests = 10
+
+  const current = chatRateLimitStore.get(clientIp)
+
+  if (!current || now >= current.resetAt) {
+    chatRateLimitStore.set(clientIp, { count: 1, resetAt: now + windowMs })
+    return next()
+  }
+
+  if (current.count >= maxRequests) {
+    console.log('Chat rate limit exceeded', { clientIp, timestamp: now })
+    return c.json({ error: 'Rate limit exceeded' }, 429)
+  }
+
+  current.count += 1
+  chatRateLimitStore.set(clientIp, current)
+  return next()
+}
+
 // ============================================
 // SECURITY HEADERS MIDDLEWARE
 // ============================================
@@ -899,37 +978,25 @@ app.use('*', async (c, next) => {
   c.header('Content-Security-Policy', csp)
 })
 
-// Enable CORS for API routes - restricted to specific domains
+// Reject browser requests from disallowed origins.
+app.use('/api/*', async (c, next) => {
+  const origin = c.req.header('Origin')
+  if (!isAllowedOrigin(origin)) {
+    return c.json({ error: 'Origin not allowed' }, 403)
+  }
+  await next()
+})
+
+// CORS for API routes with strict allowlist.
 app.use('/api/*', cors({
   origin: (origin) => {
-    const allowedOrigins = [
-      'https://shortcircuit-2t9.pages.dev',
-      'https://shortcircuits.org',
-      'https://www.shortcircuits.org',
-      'https://shortcct.com',
-      'https://www.shortcct.com',
-      // Development origins
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-    ]
-    // Allow requests with no origin (mobile apps, Postman, etc.) or from allowed origins
-    if (!origin || allowedOrigins.includes(origin)) {
-      return origin || allowedOrigins[0]
-    }
-    // Also allow any *.pages.dev subdomain for preview deployments
-    if (origin.endsWith('.pages.dev')) {
+    if (origin && isAllowedOrigin(origin)) {
       return origin
     }
-    // Also allow sandbox URLs for development
-    if (origin.includes('.sandbox.novita.ai') || origin.includes('.e2b.dev')) {
-      return origin
-    }
-    return allowedOrigins[0]
+    return undefined
   },
-  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'stripe-signature', 'X-CSRF-Token'],
-  credentials: true,
-  maxAge: 86400, // Cache preflight for 24 hours
+  allowMethods: ['GET', 'POST'],
+  allowHeaders: ['Content-Type'],
 }))
 
 // Apply auth middleware to all API routes
@@ -955,7 +1022,7 @@ const csrfProtection = async (c: any, next: any) => {
   }
   
   // Skip CSRF for public endpoints that don't require auth
-  const publicPaths = ['/api/auth/signup', '/api/auth/login', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/subscribe']
+  const publicPaths = ['/api/auth/signup', '/api/auth/login', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/subscribe', '/api/chat']
   if (publicPaths.some(path => c.req.path === path)) {
     return next()
   }
@@ -963,30 +1030,9 @@ const csrfProtection = async (c: any, next: any) => {
   const origin = c.req.header('Origin')
   const referer = c.req.header('Referer')
   
-  const allowedOrigins = [
-    'https://shortcircuit-2t9.pages.dev',
-    'https://shortcircuits.org',
-    'https://www.shortcircuits.org',
-    'https://shortcct.com',
-    'https://www.shortcct.com',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-  ]
-  
   // Check if origin or referer is from allowed domains
-  const isValidOrigin = origin && (
-    allowedOrigins.includes(origin) ||
-    origin.endsWith('.pages.dev') ||
-    origin.includes('.sandbox.novita.ai') ||
-    origin.includes('.e2b.dev')
-  )
-  
-  const isValidReferer = referer && (
-    allowedOrigins.some(o => referer.startsWith(o)) ||
-    referer.includes('.pages.dev') ||
-    referer.includes('.sandbox.novita.ai') ||
-    referer.includes('.e2b.dev')
-  )
+  const isValidOrigin = origin ? isAllowedOrigin(origin) : false
+  const isValidReferer = isAllowedReferer(referer)
   
   if (!isValidOrigin && !isValidReferer) {
     console.warn('CSRF check failed - invalid origin/referer:', { origin, referer, path: c.req.path })
@@ -1002,6 +1048,34 @@ app.use('/api/*', csrfProtection)
 // ============================================
 // PUBLIC API ROUTES
 // ============================================
+
+// Chatbot endpoint - accepts user message and returns AI-generated reply
+app.use('/api/chat', chatRateLimit)
+app.post('/api/chat', async (c) => {
+  try {
+    const clientIp = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
+    const timestamp = Date.now()
+    const body = await c.req.json().catch(() => null)
+    const rawMessage = body?.message
+    const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
+
+    console.log('Chat request', { message, timestamp, clientIp })
+
+    if (typeof rawMessage !== 'string' || !message || message.length > 500) {
+      return c.json({ error: 'Invalid message' }, 400)
+    }
+
+    configureChatbot(c.env.GROQ_API_KEY || '', c.env.DB)
+    const reply = await getChatbotReply(message)
+
+    console.log('Chat response generated', { clientIp, timestamp, message })
+
+    return c.json({ reply })
+  } catch (error) {
+    console.error('Chatbot route error', error)
+    return c.json({ reply: 'Something went wrong' }, 500)
+  }
+})
 
 // TEMPORARY: Public test email endpoint (remove after testing)
 app.post('/api/public/send-test-emails', async (c) => {
@@ -1145,12 +1219,14 @@ app.post('/api/public/send-test-emails', async (c) => {
         subject: '[TEST] Module 1 Complete - Great Progress!',
         html: emailTemplate(moduleCompleteEmailContent({
           userName: 'Kayla',
-          courseName: 'Smartwatch Development',
           moduleName: 'System Boot',
-          moduleNumber: 1,
+          courseName: 'Smartwatch Development',
+          progressPercentage: 20,
+          modulesCompleted: 1,
           totalModules: 5,
           nextModuleName: 'Timekeeping',
-          courseUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
+          nextModuleUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/',
+          isFinalModule: false,
         })),
       })
     })
@@ -1164,8 +1240,12 @@ app.post('/api/public/send-test-emails', async (c) => {
         html: emailTemplate(submissionReceivedEmailContent({
           userName: 'Kayla',
           courseName: 'Smartwatch Development',
-          lessonName: 'Module 1 Demo Submission',
-          submissionUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
+          submissionId: 'SUB-TEST-001',
+          submissionDate: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }),
         })),
       })
     })
@@ -1179,9 +1259,7 @@ app.post('/api/public/send-test-emails', async (c) => {
         html: emailTemplate(submissionApprovedEmailContent({
           userName: 'Kayla',
           courseName: 'Smartwatch Development',
-          lessonName: 'Module 1 Demo Submission',
           feedback: 'Excellent work on initializing the power management system! Your code is clean and well-documented.',
-          courseUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
         })),
       })
     })
@@ -1195,9 +1273,8 @@ app.post('/api/public/send-test-emails', async (c) => {
         html: emailTemplate(submissionNeedsRevisionEmailContent({
           userName: 'Kayla',
           courseName: 'Smartwatch Development',
-          lessonName: 'Module 2 Demo Submission',
           feedback: 'Good progress! Please add error handling for the Wi-Fi connection timeout case.',
-          courseUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
+          submissionUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/submission.html',
         })),
       })
     })
@@ -1210,10 +1287,13 @@ app.post('/api/public/send-test-emails', async (c) => {
         subject: '[TEST] Congratulations! Your Certificate is Ready',
         html: emailTemplate(certificateIssuedEmailContent({
           userName: 'Kayla',
+          recipientName: 'Kayla Sierra',
           courseName: 'Smartwatch Development: LilyGo T-Watch 2020 V3',
           certificateNumber: 'SC-CERT-TEST-001',
-          verifyUrl: 'https://shortcircuit-2t9.pages.dev/verify/SC-CERT-TEST-001',
-          downloadUrl: 'https://shortcircuit-2t9.pages.dev/api/certificates/SC-CERT-TEST-001/download'
+          completionDate: 'March 23, 2026',
+          skills: ['Embedded C/C++', 'FreeRTOS', 'I2C Communication'],
+          verificationUrl: 'https://shortcircuit-2t9.pages.dev/verify/SC-CERT-TEST-001',
+          certificateUrl: 'https://shortcircuit-2t9.pages.dev/api/certificates/SC-CERT-TEST-001/download',
         })),
       })
     })
@@ -1225,11 +1305,12 @@ app.post('/api/public/send-test-emails', async (c) => {
         to: email,
         subject: '[TEST] New Submission Requires Review',
         html: emailTemplate(adminNewSubmissionEmailContent({
-          studentName: 'Test Student',
-          studentEmail: 'student@example.com',
+          userName: 'Test Student',
+          userEmail: 'student@example.com',
           courseName: 'Smartwatch Development',
-          lessonName: 'Module 1 Demo Submission',
-          adminUrl: 'https://shortcircuit-2t9.pages.dev/admin/'
+          submissionId: 'SUB-TEST-ADMIN-001',
+          submissionDate: new Date().toLocaleDateString('en-US'),
+          adminReviewUrl: 'https://shortcircuit-2t9.pages.dev/admin/',
         })),
       })
     })
@@ -1307,12 +1388,14 @@ app.get('/api/preview/email/course-access', (c) => {
 app.get('/api/preview/email/module-complete', (c) => {
   return c.html(emailTemplate(moduleCompleteEmailContent({
     userName: 'Kayla',
-    courseName: 'Smartwatch Development',
     moduleName: 'System Boot',
-    moduleNumber: 1,
+    courseName: 'Smartwatch Development',
+    progressPercentage: 20,
+    modulesCompleted: 1,
     totalModules: 5,
     nextModuleName: 'Timekeeping',
-    courseUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
+    nextModuleUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/',
+    isFinalModule: false,
   })))
 })
 
@@ -1320,8 +1403,8 @@ app.get('/api/preview/email/submission-received', (c) => {
   return c.html(emailTemplate(submissionReceivedEmailContent({
     userName: 'Kayla',
     courseName: 'Smartwatch Development',
-    lessonName: 'Module 1 Demo Submission',
-    submissionUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
+    submissionId: 'SUB-PREVIEW-001',
+    submissionDate: 'March 23, 2026',
   })))
 })
 
@@ -1329,9 +1412,7 @@ app.get('/api/preview/email/submission-approved', (c) => {
   return c.html(emailTemplate(submissionApprovedEmailContent({
     userName: 'Kayla',
     courseName: 'Smartwatch Development',
-    lessonName: 'Module 1 Demo Submission',
     feedback: 'Excellent work on your smartwatch project! Your implementation of the power management system shows great understanding of embedded systems concepts. The touch interface is responsive and well-designed. Keep up the great work!',
-    courseUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
   })))
 })
 
@@ -1339,29 +1420,32 @@ app.get('/api/preview/email/submission-revision', (c) => {
   return c.html(emailTemplate(submissionNeedsRevisionEmailContent({
     userName: 'Kayla',
     courseName: 'Smartwatch Development',
-    lessonName: 'Module 2 Demo Submission',
     feedback: 'Great progress on your project! There are just a few areas that need attention:\n\n1. The Wi-Fi connection seems to drop occasionally - please check the reconnection logic in your code.\n2. The battery percentage display could use some smoothing to avoid flickering values.\n\nOnce these are addressed, your project will be ready for approval!',
-    courseUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/'
+    submissionUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/submission.html',
   })))
 })
 
 app.get('/api/preview/email/certificate', (c) => {
   return c.html(emailTemplate(certificateIssuedEmailContent({
     userName: 'Kayla',
+    recipientName: 'Kayla Sierra',
     courseName: 'Smartwatch Development: LilyGo T-Watch 2020 V3',
     certificateNumber: 'SC-SW-2026-001234',
-    verifyUrl: 'https://shortcircuit-2t9.pages.dev/verify/SC-SW-2026-001234',
-    downloadUrl: 'https://shortcircuit-2t9.pages.dev/api/certificates/SC-SW-2026-001234/download'
+    completionDate: 'March 23, 2026',
+    skills: ['Embedded C/C++', 'FreeRTOS', 'I2C Communication'],
+    verificationUrl: 'https://shortcircuit-2t9.pages.dev/verify/SC-SW-2026-001234',
+    certificateUrl: 'https://shortcircuit-2t9.pages.dev/api/certificates/SC-SW-2026-001234/download',
   })))
 })
 
 app.get('/api/preview/email/admin-submission', (c) => {
   return c.html(emailTemplate(adminNewSubmissionEmailContent({
-    studentName: 'Kayla Sierra',
-    studentEmail: 'kayla@kaylasierra.com',
+    userName: 'Kayla Sierra',
+    userEmail: 'kayla@kaylasierra.com',
     courseName: 'Smartwatch Development',
-    lessonName: 'Module 1 Demo Submission',
-    adminUrl: 'https://shortcircuit-2t9.pages.dev/admin/'
+    submissionId: 'SUB-PREVIEW-001',
+    submissionDate: 'March 23, 2026',
+    adminReviewUrl: 'https://shortcircuit-2t9.pages.dev/admin/',
   })))
 })
 
@@ -2474,7 +2558,7 @@ app.get('/api/admin/stats', requireAdmin, async (c) => {
 // API: Create Stripe Checkout Session
 app.post('/api/checkout/create-session', async (c) => {
   const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2025-01-27.acacia',
+    apiVersion: '2026-01-28.clover',
   })
 
   try {
@@ -2595,7 +2679,7 @@ app.post('/api/checkout/create-session', async (c) => {
 // API: Stripe Webhook Handler
 app.post('/api/webhooks/stripe', async (c) => {
   const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2025-01-27.acacia',
+    apiVersion: '2026-01-28.clover',
   })
 
   const webhookSecret = c.env.STRIPE_WEBHOOK_SECRET
@@ -2621,7 +2705,7 @@ app.post('/api/webhooks/stripe', async (c) => {
 
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session
+        const session = event.data.object as CheckoutSessionWithShippingDetails
         console.log('Payment successful for session:', session.id)
         
         // Get items from metadata
@@ -2786,7 +2870,7 @@ app.post('/api/webhooks/stripe', async (c) => {
 // API: Get checkout session details
 app.get('/api/checkout/session/:sessionId', async (c) => {
   const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, {
-    apiVersion: '2025-01-27.acacia',
+    apiVersion: '2026-01-28.clover',
   })
 
   try {
@@ -2798,7 +2882,7 @@ app.get('/api/checkout/session/:sessionId', async (c) => {
 
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['line_items', 'customer'],
-    })
+    }) as CheckoutSessionWithShippingDetails
 
     return c.json({
       id: session.id,
@@ -3231,11 +3315,13 @@ app.post('/api/upload', requireAuth, async (c) => {
 
   try {
     const formData = await c.req.formData()
-    const file = formData.get('file') as File
+    const fileEntry = formData.get('file')
 
-    if (!file) {
+    if (!fileEntry || typeof fileEntry === 'string') {
       return c.json({ error: 'No file provided' }, 400)
     }
+
+    const file = fileEntry as unknown as File
 
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
@@ -3854,7 +3940,9 @@ app.post('/api/courses/:courseId/modules/:moduleId/reviews', requireAuth, async 
       'SELECT COUNT(*) as total FROM lessons WHERE module_id = ? AND is_published = 1'
     ).bind(moduleId).first<{ total: number }>()
 
-    const isVerified = moduleProgress?.completed === totalLessons?.total && totalLessons?.total > 0
+    const completedLessonCount = Number(moduleProgress?.completed ?? 0)
+    const totalLessonCount = Number(totalLessons?.total ?? 0)
+    const isVerified = totalLessonCount > 0 && completedLessonCount === totalLessonCount
 
     // Create new review
     const reviewId = crypto.randomUUID()
@@ -3980,6 +4068,10 @@ app.get('/api/courses/:courseId/progress', requireAuth, async (c) => {
 app.post('/api/courses/:courseId/certificate', requireAuth, async (c) => {
   const user = c.get('user')!
   const courseId = c.req.param('courseId')
+
+  if (!courseId) {
+    return c.json({ error: 'Course ID is required' }, 400)
+  }
 
   try {
     // Check if course is completed
@@ -5263,13 +5355,13 @@ app.post('/api/admin/test-email', requireAdmin, async (c) => {
           customerName: 'Test User',
           items: [{ name: 'Smart Watch Kit', quantity: 1, price: 99 }],
           subtotal: 99,
-          shippingCost: 0,
+          shipping: 0,
           total: 99,
           shippingAddress: {
             line1: '123 Test Street',
             city: 'Test City',
             state: 'TS',
-            postal_code: '12345',
+            postalCode: '12345',
             country: 'US'
           }
         })
@@ -5708,7 +5800,8 @@ app.post('/api/admin/test-emails', requireAdmin, async (c) => {
         html: emailTemplate(submissionNeedsRevisionEmailContent({
           userName: 'Kayla',
           courseName: 'Smartwatch Development',
-          feedback: 'Great progress on your project! There are just a few areas that need attention:\n\n1. The Wi-Fi connection seems to drop occasionally - please check the reconnection logic.\n2. The battery display could use some smoothing to avoid flickering.\n\nOnce these are addressed, your project will be ready for approval!'
+          feedback: 'Great progress on your project! There are just a few areas that need attention:\n\n1. The Wi-Fi connection seems to drop occasionally - please check the reconnection logic.\n2. The battery display could use some smoothing to avoid flickering.\n\nOnce these are addressed, your project will be ready for approval!',
+          submissionUrl: 'https://shortcircuit-2t9.pages.dev/course/smartwatch/submission.html',
         })),
       })
     })
@@ -5721,9 +5814,12 @@ app.post('/api/admin/test-emails', requireAdmin, async (c) => {
         subject: '[TEST] Your Short Circuit Certificate is Ready!',
         html: emailTemplate(certificateIssuedEmailContent({
           userName: 'Kayla',
+          recipientName: 'Kayla Sierra',
           courseName: 'Smartwatch Development: LilyGo T-Watch 2020 V3',
           certificateNumber: 'SC-SW-2026-TEST001',
+          completionDate: 'March 23, 2026',
           verificationUrl: 'https://shortcircuit-2t9.pages.dev/verify/SC-SW-2026-TEST001',
+          certificateUrl: 'https://shortcircuit-2t9.pages.dev/api/certificates/SC-SW-2026-TEST001/download',
           skills: ['Embedded C/C++', 'FreeRTOS', 'I2C Communication', 'Touch Interfaces', 'Power Management']
         })),
       })
@@ -5736,12 +5832,12 @@ app.post('/api/admin/test-emails', requireAdmin, async (c) => {
         to: email,
         subject: '[TEST] New Submission Requires Review',
         html: emailTemplate(adminNewSubmissionEmailContent({
-          studentName: 'Kayla Sierra',
-          studentEmail: email,
+          userName: 'Kayla Sierra',
+          userEmail: email,
           courseName: 'Smartwatch Development',
           submissionId: 'SUB-TEST-001',
           submissionDate: new Date().toLocaleDateString('en-US'),
-          adminUrl: 'https://shortcircuit-2t9.pages.dev/admin/'
+          adminReviewUrl: 'https://shortcircuit-2t9.pages.dev/admin/'
         })),
       })
     })
@@ -5767,10 +5863,10 @@ app.post('/api/admin/test-emails', requireAdmin, async (c) => {
 // ============================================
 
 // Serve certificate verification page for /verify/* routes
-app.get('/verify/*', serveStatic({ path: './verify.html' }))
-app.get('/verify', serveStatic({ path: './verify.html' }))
+app.get('/verify/*', (c) => c.redirect('/verify.html'))
+app.get('/verify', (c) => c.redirect('/verify.html'))
 
 app.use('/*', serveStatic())
-app.get('*', serveStatic({ path: './index.html' }))
+app.get('*', (c) => c.redirect('/index.html'))
 
 export default app
