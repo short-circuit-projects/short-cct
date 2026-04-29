@@ -64,6 +64,43 @@ function updateCountdown() {
 updateCountdown();
 setInterval(updateCountdown, 1000);
 
+// Launch Countdown Timer - May 25th, 2026
+function updateLaunchCountdown() {
+    const countdownElement = document.getElementById('launch-countdown');
+    if (!countdownElement) return;
+
+    // Create target date: May 25, 2026 at 12:00:00 AM
+    const targetDate = new Date(2026, 4, 25, 0, 0, 0).getTime(); // Month is 0-indexed (4 = May)
+    const now = new Date().getTime();
+    const difference = targetDate - now;
+
+    const daysEl = document.getElementById('launch-days');
+    const hoursEl = document.getElementById('launch-hours');
+    const minutesEl = document.getElementById('launch-minutes');
+    const secondsEl = document.getElementById('launch-seconds');
+
+    if (difference > 0) {
+        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+        if (daysEl) daysEl.textContent = days.toString().padStart(2, '0');
+        if (hoursEl) hoursEl.textContent = hours.toString().padStart(2, '0');
+        if (minutesEl) minutesEl.textContent = minutes.toString().padStart(2, '0');
+        if (secondsEl) secondsEl.textContent = seconds.toString().padStart(2, '0');
+    } else {
+        if (daysEl) daysEl.textContent = '00';
+        if (hoursEl) hoursEl.textContent = '00';
+        if (minutesEl) minutesEl.textContent = '00';
+        if (secondsEl) secondsEl.textContent = '00';
+    }
+}
+
+// Run immediately and then every second for live updates
+updateLaunchCountdown();
+setInterval(updateLaunchCountdown, 1000);
+
 // FAQ Accordion
 document.querySelectorAll('.faq-question').forEach(question => {
     question.addEventListener('click', () => {

@@ -1006,6 +1006,24 @@
             opacity: 0.8;
         }
 
+        /* Launch Countdown Section */
+        .launch-countdown {
+            background: linear-gradient(135deg, var(--navy), #0a1118);
+            color: var(--white);
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .launch-content h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+
+        .launch-content .countdown {
+            justify-content: center;
+        }
+
         /* Sections */
         .section {
             padding: 80px 0;
@@ -1688,6 +1706,14 @@
                 text-align: center;
             }
 
+            .launch-content {
+                text-align: center;
+            }
+
+            .launch-content h2 {
+                font-size: 24px;
+            }
+
             .how-grid,
             .spotlight-content,
             .project-grid,
@@ -1791,6 +1817,22 @@
 
             .spotlight-text p {
                 font-size: 14px;
+            }
+
+            .launch-content h2 {
+                font-size: 20px;
+            }
+
+            .countdown {
+                gap: 10px;
+            }
+
+            .countdown-number {
+                font-size: 18px;
+            }
+
+            .countdown-label {
+                font-size: 10px;
             }
 
             .faq-question span {
@@ -2144,6 +2186,33 @@
                 </div>
                 <div class="hero-image">
                     <img src="/images/design-challenge.png" alt="Short Circuit Smartwatch project with multiple screens" style="width: 100%; height: auto; border-radius: 8px;">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Launch Countdown Section -->
+    <section class="launch-countdown">
+        <div class="container">
+            <div class="launch-content">
+                <h2>Store Opens on May 25th</h2>
+                <div class="countdown" id="launch-countdown">
+                    <div class="countdown-item">
+                        <span class="countdown-number" id="launch-days">00</span>
+                        <span class="countdown-label">Days</span>
+                    </div>
+                    <div class="countdown-item">
+                        <span class="countdown-number" id="launch-hours">00</span>
+                        <span class="countdown-label">Hours</span>
+                    </div>
+                    <div class="countdown-item">
+                        <span class="countdown-number" id="launch-minutes">00</span>
+                        <span class="countdown-label">Minutes</span>
+                    </div>
+                    <div class="countdown-item">
+                        <span class="countdown-number" id="launch-seconds">00</span>
+                        <span class="countdown-label">Seconds</span>
+                    </div>
                 </div>
             </div>
         </div>
