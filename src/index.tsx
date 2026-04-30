@@ -27,6 +27,7 @@ type Bindings = {
   STRIPE_SECRET_KEY: string
   STRIPE_WEBHOOK_SECRET: string
   STRIPE_PUBLISHABLE_KEY: string
+  DISABLE_STRIPE_PAYMENTS?: string
   ADMIN_EMAILS: string
   RESEND_API_KEY: string
   GROQ_API_KEY: string
@@ -1331,6 +1332,7 @@ app.post('/api/public/send-test-emails', async (c) => {
 app.get('/api/config', (c) => {
   return c.json({
     publishableKey: c.env.STRIPE_PUBLISHABLE_KEY,
+    stripeDisabled: c.env.DISABLE_STRIPE_PAYMENTS === 'true',
   })
 })
 
@@ -2557,6 +2559,10 @@ app.get('/api/admin/stats', requireAdmin, async (c) => {
 
 // API: Create Stripe Checkout Session
 app.post('/api/checkout/create-session', async (c) => {
+  if (c.env.DISABLE_STRIPE_PAYMENTS === 'true') {
+    return c.json({ error: 'Payments are temporarily disabled' }, 503)
+  }
+
   const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, {
     apiVersion: '2026-01-28.clover',
   })

@@ -9,7 +9,8 @@
   // IMPORTANT: Secrets should be set via Cloudflare Dashboard or wrangler secret put
   // See README.md for setup instructions
   "vars": {
-    "ADMIN_EMAILS": "kayla@kaylasierra.com,support@shortcct.com"
+    "ADMIN_EMAILS": "kayla@kaylasierra.com,support@shortcct.com",
+    "DISABLE_STRIPE_PAYMENTS": "true"
   },
   "d1_databases": [
     {

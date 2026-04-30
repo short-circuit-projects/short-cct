@@ -5,10 +5,27 @@
 
 let stripe = null;
 let isInitialized = false;
+let stripeDisabled = false;
+
+function setCheckoutDisabledState() {
+    stripeDisabled = true;
+    const checkoutBtn = document.querySelector('.checkout-btn');
+    const message = document.getElementById('checkoutDisabledMessage');
+
+    if (checkoutBtn) {
+        checkoutBtn.textContent = 'Checkout unavailable';
+        checkoutBtn.disabled = true;
+        checkoutBtn.classList.add('disabled');
+    }
+
+    if (message) {
+        message.style.display = 'block';
+    }
+}
 
 // Initialize Stripe with publishable key from server
 async function initializeStripe() {
-    if (isInitialized) return true;
+    if (isInitialized || stripeDisabled) return true;
     
     try {
         const response = await fetch('/api/config');
@@ -17,6 +34,12 @@ async function initializeStripe() {
         }
         const config = await response.json();
         
+        if (config.stripeDisabled) {
+            console.warn('Stripe is temporarily disabled by server config');
+            setCheckoutDisabledState();
+            return false;
+        }
+
         if (!config.publishableKey) {
             console.error('No publishable key in config');
             return false;
@@ -53,6 +76,7 @@ async function checkInventory(items) {
 
 // Create checkout session and redirect to Stripe
 async function proceedToCheckout() {
+
     const cart = JSON.parse(localStorage.getItem('shortCircuitCart')) || [];
     
     if (cart.length === 0) {
