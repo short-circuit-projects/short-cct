@@ -170,8 +170,8 @@ const MarkdownRenderer = {
         // Bold (**text**)
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         
-        // Italic (*text*)
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        // Italic (*text*) - restricted to single line to avoid matching * inside code blocks
+        html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
         
         // Callout boxes
         html = html.replace(/:::tip\n?([\s\S]*?):::/g, '<div class="callout callout-tip"><div class="callout-icon"><i class="fas fa-lightbulb"></i></div><div class="callout-content"><strong>Tip</strong>$1</div></div>');

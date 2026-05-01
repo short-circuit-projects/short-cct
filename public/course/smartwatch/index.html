@@ -2480,6 +2480,7 @@
             overflow: hidden;
             border: 1px solid #30363d;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3);
+            min-height: 120px;
         }
         
         .code-block::before {
@@ -2809,6 +2810,15 @@
             opacity: 0;
             transition: all 0.2s;
         }
+        
+        .code-block:hover .copy-btn {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background: var(--gray-700);
+            color: var(--white);
+        }
 
         /* Lesson Tables */
         .table-wrapper {
@@ -2860,14 +2870,7 @@
             color: var(--gray-600);
         }
 
-        .code-block:hover .copy-btn {
-            opacity: 1;
-        }
 
-        .copy-btn:hover {
-            background: var(--gray-700);
-            color: var(--white);
-        }
 
         .inline-code {
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -3182,6 +3185,15 @@
 
         .lesson-videos-section {
             margin-bottom: 24px;
+            max-width: 65%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .section-videos {
+            max-width: 65%;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .video-placeholder {
